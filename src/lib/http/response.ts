@@ -14,6 +14,10 @@ export function parseRouteError(error: unknown) {
     return jsonError("ข้อมูลที่ส่งมาไม่ถูกต้อง", 422, error.flatten());
   }
 
+  if (error instanceof Error && "statusCode" in error && typeof error.statusCode === "number") {
+    return jsonError(error.message, error.statusCode, "details" in error ? error.details : undefined);
+  }
+
   if (error instanceof Error) {
     return jsonError(error.message, 400);
   }

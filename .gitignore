@@ -13,6 +13,7 @@ test-results
 
 data/uploads
 data/chroma
+secrets
 dev.db
 dev.db-journal
 prisma/dev.db

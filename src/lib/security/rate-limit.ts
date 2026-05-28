@@ -49,3 +49,13 @@ export const globalRateLimiter = createMemoryRateLimiter({
   max: Number(process.env.RATE_LIMIT_MAX || 60),
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000)
 });
+
+export const uploadRateLimiter = createMemoryRateLimiter({
+  max: Number(process.env.UPLOAD_RATE_LIMIT_MAX || process.env.RATE_LIMIT_MAX || 20),
+  windowMs: Number(process.env.UPLOAD_RATE_LIMIT_WINDOW_MS || process.env.RATE_LIMIT_WINDOW_MS || 60_000)
+});
+
+export const chatRateLimiter = createMemoryRateLimiter({
+  max: Number(process.env.CHAT_RATE_LIMIT_MAX || process.env.RATE_LIMIT_MAX || 60),
+  windowMs: Number(process.env.CHAT_RATE_LIMIT_WINDOW_MS || process.env.RATE_LIMIT_WINDOW_MS || 60_000)
+});

@@ -18,7 +18,8 @@ import { retrieveContext } from "@/lib/rag/rag-service";
 import { recordUsage } from "@/lib/usage/usage-service";
 import { chatPromptSchema } from "@/lib/validation/schemas";
 import { clientIpFromHeaders, sanitizePlainText } from "@/lib/security/input";
-import { globalRateLimiter } from "@/lib/security/rate-limit";
+import { chatRateLimiter } from "@/lib/security/rate-limit";
+import { assertDailyChatQuota } from "@/lib/security/quota";
 
 export const runtime = "nodejs";
 
@@ -29,7 +30,7 @@ function sse(event: string, data: unknown) {
 export async function POST(request: Request) {
   try {
     const user = await requireCurrentUser();
-    const limit = globalRateLimiter.check(`chat:${user.id}:${clientIpFromHeaders(request.headers)}`);
+    const limit = chatRateLimiter.check(`chat:${user.id}:${clientIpFromHeaders(request.headers)}`);
 
     if (!limit.allowed) {
       return jsonError("ส่งข้อความถี่เกินไป กรุณาลองใหม่ภายหลัง", 429, { resetAt: limit.resetAt });
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
 
     const body = chatPromptSchema.parse(await request.json());
     const message = sanitizePlainText(body.message);
+    await assertDailyChatQuota(user.id);
     const chat = await ensureChat(user.id, body.sessionId);
     const existingChat = await getChatMessages(user.id, chat.id);
     const isFirstMessage = existingChat.messages.length === 0;

@@ -65,6 +65,13 @@ test.describe("protected routes", () => {
     await expect(page.getByRole("heading", { name: "เข้าสู่ Trainee Knowledge Assistant" })).toBeVisible();
   });
 
+  test("protects the admin diagnostics page", async ({ page }) => {
+    await page.goto("/admin");
+
+    await expect(page).toHaveURL(/\/login\?next=%2Fadmin$/);
+    await expect(page.getByRole("heading", { name: "เข้าสู่ Trainee Knowledge Assistant" })).toBeVisible();
+  });
+
   test("redirects authenticated users away from login", async ({ page }) => {
     await login(page);
 
@@ -86,6 +93,22 @@ test.describe("desktop shell", () => {
     await expect(page.getByPlaceholder("ถามอะไรก็ได้")).toBeVisible();
     await expect(page.getByRole("link", { name: "อัปโหลด" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Token usage" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Diagnostics" })).toBeVisible();
+  });
+});
+
+test.describe("admin diagnostics", () => {
+  test("shows OpenAI, Chroma, DB, and upload directory statuses", async ({ page, isMobile }) => {
+    test.skip(isMobile, "desktop-only diagnostics assertion");
+
+    await login(page);
+    await page.goto("/admin");
+
+    await expect(page.getByRole("heading", { name: "Admin diagnostics" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "OpenAI" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Chroma" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Database" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Upload directory" })).toBeVisible();
   });
 });
 

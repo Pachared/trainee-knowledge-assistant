@@ -386,4 +386,37 @@ describe("knowledge assistant API flow", () => {
     expect(payload.data?.uploadDirectory.path).toBe(uploadDir);
     process.env.OPENAI_API_KEY = "";
   });
+
+  it("enforces per-user upload and chat quotas", async () => {
+    process.env.MAX_DOCUMENTS_PER_USER = "0";
+
+    const uploadBlocked = await uploadFile(
+      routes,
+      new File(["quota blocked content"], "quota-blocked.txt", {
+        type: "text/plain"
+      })
+    );
+
+    expect(uploadBlocked.response.status).toBe(429);
+    expect(uploadBlocked.payload.error?.message).toContain("quota");
+
+    process.env.MAX_DOCUMENTS_PER_USER = "";
+    process.env.MAX_DAILY_CHAT_MESSAGES_PER_USER = "0";
+
+    const chatBlocked = await routes.chatPost(
+      new Request("http://test.local/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "This should be blocked by chat quota"
+        })
+      })
+    );
+    const chatBlockedPayload = await parseJson(chatBlocked);
+
+    expect(chatBlocked.status).toBe(429);
+    expect(chatBlockedPayload.error?.message).toContain("quota");
+
+    process.env.MAX_DAILY_CHAT_MESSAGES_PER_USER = "";
+  });
 });

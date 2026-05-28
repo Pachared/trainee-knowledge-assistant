@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 
-const protectedRoutes = ["/chat", "/upload", "/usage"];
+const protectedRoutes = ["/chat", "/upload", "/usage", "/admin"];
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -22,5 +22,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/chat/:path*", "/upload/:path*", "/usage/:path*", "/login"]
+  matcher: ["/chat/:path*", "/upload/:path*", "/usage/:path*", "/admin/:path*", "/login"]
 };

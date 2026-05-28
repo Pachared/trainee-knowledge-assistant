@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "test:docker:rag": "node scripts/docker-full-rag-test.mjs",
     "test:watch": "vitest",
+    "cleanup:e2e-db": "node scripts/cleanup-e2e-sqlite.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",

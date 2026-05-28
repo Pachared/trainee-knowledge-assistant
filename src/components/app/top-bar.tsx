@@ -8,6 +8,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import AnalyticsOutlinedIcon from "@mui/icons-material/AnalyticsOutlined";
 import AddCommentOutlinedIcon from "@mui/icons-material/AddCommentOutlined";
+import AdminPanelSettingsOutlinedIcon from "@mui/icons-material/AdminPanelSettingsOutlined";
 import DriveFolderUploadOutlinedIcon from "@mui/icons-material/DriveFolderUploadOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import MenuOutlinedIcon from "@mui/icons-material/MenuOutlined";
@@ -57,6 +58,9 @@ export function TopBar({ view, sidebarOpen = false, onOpenSidebar, onNewChat }: 
           </Button>
           <Button component={Link} href="/usage" variant="outlined" startIcon={<AnalyticsOutlinedIcon />}>
             Token usage
+          </Button>
+          <Button component={Link} href="/admin" variant="outlined" startIcon={<AdminPanelSettingsOutlinedIcon />}>
+            Diagnostics
           </Button>
           <Button type="button" variant="outlined" onClick={onNewChat} startIcon={<EditOutlinedIcon />}>
             แชทใหม่
