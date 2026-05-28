@@ -52,6 +52,7 @@ export function Sidebar({
   const [selectedChat, setSelectedChat] = useState<ApiChat | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameTitle, setRenameTitle] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   function openMenu(event: MouseEvent<HTMLElement>, chat: ApiChat) {
     event.stopPropagation();
@@ -81,13 +82,23 @@ export function Sidebar({
     setSelectedChat(null);
   }
 
-  async function submitDelete() {
-    if (!selectedChat || !window.confirm(`ลบแชท "${selectedChat.title}"?`)) {
+  function beginDelete() {
+    if (!selectedChat) {
       closeMenu();
       return;
     }
-    const chatId = selectedChat.id;
+    setDeleteOpen(true);
     closeMenu();
+  }
+
+  async function submitDelete() {
+    if (!selectedChat) {
+      setDeleteOpen(false);
+      return;
+    }
+
+    const chatId = selectedChat.id;
+    setDeleteOpen(false);
     setSelectedChat(null);
     await onDeleteChat(chatId);
   }
@@ -222,7 +233,7 @@ export function Sidebar({
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
         <MenuItem onClick={beginRename}>เปลี่ยนชื่อแชท</MenuItem>
-        <MenuItem onClick={() => void submitDelete()} sx={{ color: "error.main" }}>
+        <MenuItem onClick={beginDelete} sx={{ color: "error.main" }}>
           ลบแชท
         </MenuItem>
       </Menu>
@@ -250,6 +261,23 @@ export function Sidebar({
           </Button>
           <Button type="button" variant="contained" onClick={() => void submitRename()} disabled={!renameTitle.trim()}>
             บันทึก
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>ลบแชท</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {`ต้องการลบแชท "${selectedChat?.title ?? ""}" และข้อความทั้งหมดในแชทนี้หรือไม่?`}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" onClick={() => setDeleteOpen(false)}>
+            ยกเลิก
+          </Button>
+          <Button type="button" variant="contained" color="error" onClick={() => void submitDelete()}>
+            ลบแชท
           </Button>
         </DialogActions>
       </Dialog>

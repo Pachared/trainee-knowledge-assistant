@@ -111,9 +111,9 @@ test.describe("management actions", () => {
     await expect(page.getByText(renamedTitle, { exact: true })).toBeVisible();
     await expect(page.getByText(originalTitle, { exact: true })).toHaveCount(0);
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: `จัดการแชท ${renamedTitle}`, exact: true }).click();
     await page.getByRole("menuitem", { name: "ลบแชท" }).click();
+    await page.getByRole("dialog", { name: "ลบแชท" }).getByRole("button", { name: "ลบแชท" }).click();
 
     await expect(page.getByText("ลบแชทเรียบร้อย")).toBeVisible();
     await expect(page.getByText(renamedTitle, { exact: true })).toHaveCount(0);
@@ -136,8 +136,8 @@ test.describe("management actions", () => {
     await page.getByRole("button", { name: `re-index Chroma ${reindexTitle}` }).click();
     await expect(page.getByText(/re-index Chroma|Chroma indexing failed/).first()).toBeVisible();
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: `ลบเอกสาร ${deleteTitle}` }).click();
+    await page.getByRole("dialog", { name: "ลบเอกสาร" }).getByRole("button", { name: "ลบเอกสาร" }).click();
 
     await expect(page.getByText("ลบเอกสารเรียบร้อย")).toBeVisible();
     await expect(page.getByText(deleteTitle, { exact: true })).toHaveCount(0);

@@ -7,6 +7,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 const cookieJar = vi.hoisted(() => new Map<string, { value: string }>());
+const chromaState = vi.hoisted(() => ({
+  failWrites: true,
+  storedIds: [] as string[]
+}));
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({
@@ -15,6 +19,28 @@ vi.mock("next/headers", () => ({
       cookieJar.set(name, { value });
     }
   })
+}));
+
+vi.mock("chromadb", () => ({
+  ChromaClient: class {
+    getOrCreateCollection() {
+      return Promise.resolve({
+        add: async (input: { ids: string[] }) => {
+          if (chromaState.failWrites) {
+            throw new Error("mock Chroma write failed");
+          }
+          chromaState.storedIds = input.ids;
+        },
+        delete: async () => {
+          chromaState.storedIds = [];
+        },
+        query: async () => ({
+          ids: [chromaState.storedIds],
+          distances: [chromaState.storedIds.map(() => 0)]
+        })
+      });
+    }
+  }
 }));
 
 type ApiEnvelope<T> = {
@@ -36,6 +62,7 @@ type Routes = {
   documentReindex: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   chatPost: (request: Request) => Promise<Response>;
   usageGet: () => Promise<Response>;
+  adminDiagnosticsGet: () => Promise<Response>;
 };
 
 const testDbName = `integration-${Date.now()}.db`;
@@ -110,7 +137,18 @@ describe("knowledge assistant API flow", () => {
     await mkdir(uploadDir, { recursive: true });
     await applyMigration();
 
-    const [loginRoute, chatsRoute, chatActionsRoute, uploadRoute, documentActionsRoute, documentReindexRoute, chatRoute, usageRoute, db] =
+    const [
+      loginRoute,
+      chatsRoute,
+      chatActionsRoute,
+      uploadRoute,
+      documentActionsRoute,
+      documentReindexRoute,
+      chatRoute,
+      usageRoute,
+      adminDiagnosticsRoute,
+      db
+    ] =
       await Promise.all([
       import("@/app/api/auth/login/route"),
       import("@/app/api/chats/route"),
@@ -120,6 +158,7 @@ describe("knowledge assistant API flow", () => {
       import("@/app/api/documents/[documentId]/reindex/route"),
       import("@/app/api/chat/route"),
       import("@/app/api/usage/route"),
+      import("@/app/api/admin/diagnostics/route"),
       import("@/lib/db/prisma")
     ]);
 
@@ -132,7 +171,8 @@ describe("knowledge assistant API flow", () => {
       documentDelete: documentActionsRoute.DELETE,
       documentReindex: documentReindexRoute.POST,
       chatPost: chatRoute.POST,
-      usageGet: usageRoute.GET
+      usageGet: usageRoute.GET,
+      adminDiagnosticsGet: adminDiagnosticsRoute.GET
     };
     prisma = db.prisma;
   }, 30_000);
@@ -224,6 +264,30 @@ describe("knowledge assistant API flow", () => {
     expect(reindexDetails?.document?.status).toBe("ready_without_chroma");
     expect(reindexDetails?.document?.failedReason).toContain("Chroma indexing failed");
 
+    chromaState.failWrites = false;
+
+    const successfulReindexResponse = await routes.documentReindex(
+      new Request(`http://test.local/api/documents/${txtUpload.payload.data?.document.id}/reindex`, {
+        method: "POST"
+      }),
+      { params: Promise.resolve({ documentId: txtUpload.payload.data?.document.id ?? "" }) }
+    );
+    const successfulReindexPayload = await parseJson<{
+      document: { id: string; status: string; failedReason?: string | null };
+    }>(successfulReindexResponse);
+
+    expect(successfulReindexResponse.status).toBe(200);
+    expect(successfulReindexPayload.data?.document.status).toBe("ready");
+    expect(successfulReindexPayload.data?.document.failedReason).toBeNull();
+
+    const reindexedDocument = await prisma.document.findUniqueOrThrow({
+      where: { id: txtUpload.payload.data?.document.id }
+    });
+
+    expect(reindexedDocument.status).toBe("ready");
+    expect(reindexedDocument.failedReason).toBeNull();
+    expect(chromaState.storedIds.length).toBeGreaterThan(0);
+
     const chatResponse = await routes.chatPost(
       new Request("http://test.local/api/chat", {
         method: "POST",
@@ -295,4 +359,22 @@ describe("knowledge assistant API flow", () => {
       prisma.document.findFirstOrThrow({ where: { id: pdfUpload.payload.data?.document.id } })
     ).rejects.toThrow();
   }, 30_000);
+
+  it("reports admin diagnostics for Chroma, DB migrations, and upload directory writability", async () => {
+    chromaState.failWrites = false;
+
+    const response = await routes.adminDiagnosticsGet();
+    const payload = await parseJson<{
+      chroma: { status: string; url: string; collection: string };
+      database: { status: string; migrationCount: number };
+      uploadDirectory: { status: string; path: string };
+    }>(response);
+
+    expect(response.status).toBe(200);
+    expect(payload.data?.chroma.status).toBe("ok");
+    expect(payload.data?.database.status).toBe("ok");
+    expect(payload.data?.database.migrationCount).toBeGreaterThan(0);
+    expect(payload.data?.uploadDirectory.status).toBe("ok");
+    expect(payload.data?.uploadDirectory.path).toBe(uploadDir);
+  });
 });

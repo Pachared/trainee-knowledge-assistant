@@ -4,6 +4,10 @@ import { useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
@@ -24,6 +28,7 @@ export function UploadView({ documents, onUpload, onDeleteDocument, onReindexDoc
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApiDocument | null>(null);
 
   async function handleFile(file?: File) {
     if (!file) {
@@ -38,13 +43,16 @@ export function UploadView({ documents, onUpload, onDeleteDocument, onReindexDoc
     }
   }
 
-  async function handleDelete(document: ApiDocument) {
-    if (!window.confirm(`ลบเอกสาร "${document.title}"?`)) {
+  async function confirmDelete() {
+    if (!deleteTarget) {
       return;
     }
-    setBusyDocumentId(document.id);
+
+    const documentId = deleteTarget.id;
+    setBusyDocumentId(documentId);
+    setDeleteTarget(null);
     try {
-      await onDeleteDocument(document.id);
+      await onDeleteDocument(documentId);
     } finally {
       setBusyDocumentId(null);
     }
@@ -146,7 +154,7 @@ export function UploadView({ documents, onUpload, onDeleteDocument, onReindexDoc
                       aria-label={`ลบเอกสาร ${document.title}`}
                       size="small"
                       disabled={busyDocumentId === document.id}
-                      onClick={() => void handleDelete(document)}
+                      onClick={() => setDeleteTarget(document)}
                       color="error"
                     >
                       <DeleteOutlineOutlinedIcon fontSize="small" />
@@ -162,6 +170,23 @@ export function UploadView({ documents, onUpload, onDeleteDocument, onReindexDoc
           </Stack>
         </Box>
       </Box>
+
+      <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>ลบเอกสาร</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {`ต้องการลบเอกสาร "${deleteTarget?.title ?? ""}" พร้อม chunks และข้อมูลใน Chroma หรือไม่?`}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" onClick={() => setDeleteTarget(null)}>
+            ยกเลิก
+          </Button>
+          <Button type="button" variant="contained" color="error" onClick={() => void confirmDelete()}>
+            ลบเอกสาร
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
