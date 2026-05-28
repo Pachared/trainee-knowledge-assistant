@@ -133,6 +133,7 @@ describe("knowledge assistant API flow", () => {
     process.env.SESSION_SECRET = "integration-session-secret-change-me-32";
     process.env.CHROMA_URL = "http://127.0.0.1:65535";
     process.env.UPLOAD_DIR = uploadDir;
+    process.env.OPENAI_API_KEY = "";
 
     await mkdir(uploadDir, { recursive: true });
     await applyMigration();
@@ -362,11 +363,13 @@ describe("knowledge assistant API flow", () => {
 
   it("reports admin diagnostics for Chroma, DB migrations, and upload directory writability", async () => {
     chromaState.failWrites = false;
+    process.env.OPENAI_API_KEY = "test-openai-key";
 
     const response = await routes.adminDiagnosticsGet();
     const payload = await parseJson<{
       chroma: { status: string; url: string; collection: string };
       database: { status: string; migrationCount: number };
+      openai: { status: string; keyConfigured: boolean; keyCount: number; model: string; embeddingModel: string };
       uploadDirectory: { status: string; path: string };
     }>(response);
 
@@ -374,7 +377,13 @@ describe("knowledge assistant API flow", () => {
     expect(payload.data?.chroma.status).toBe("ok");
     expect(payload.data?.database.status).toBe("ok");
     expect(payload.data?.database.migrationCount).toBeGreaterThan(0);
+    expect(payload.data?.openai.status).toBe("ok");
+    expect(payload.data?.openai.keyConfigured).toBe(true);
+    expect(payload.data?.openai.keyCount).toBe(1);
+    expect(payload.data?.openai.model).toBe("gpt-5");
+    expect(payload.data?.openai.embeddingModel).toBe("text-embedding-3-small");
     expect(payload.data?.uploadDirectory.status).toBe("ok");
     expect(payload.data?.uploadDirectory.path).toBe(uploadDir);
+    process.env.OPENAI_API_KEY = "";
   });
 });

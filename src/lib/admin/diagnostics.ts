@@ -3,9 +3,10 @@ import { constants } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
-import { getChromaConfig } from "@/lib/env";
+import { getChromaConfig, getOpenAIKeys } from "@/lib/env";
 import { getUploadDir } from "@/lib/documents/file-storage";
 import { getChromaCollection } from "@/lib/rag/chroma";
+import { getOpenAIEmbeddingModel, getOpenAIModel } from "@/lib/ai/openai-client";
 
 type DiagnosticStatus = "ok" | "warning" | "error";
 
@@ -84,6 +85,18 @@ async function checkUploadDirectory() {
   }
 }
 
+function checkOpenAI() {
+  const keys = getOpenAIKeys();
+
+  return {
+    status: (keys.length ? "ok" : "warning") as DiagnosticStatus,
+    keyConfigured: keys.length > 0,
+    keyCount: keys.length,
+    model: getOpenAIModel(),
+    embeddingModel: getOpenAIEmbeddingModel()
+  };
+}
+
 export async function getAdminDiagnostics() {
   const [chroma, database, uploadDirectory] = await Promise.all([
     checkChroma(),
@@ -94,6 +107,7 @@ export async function getAdminDiagnostics() {
   return {
     chroma,
     database,
+    openai: checkOpenAI(),
     uploadDirectory
   };
 }
