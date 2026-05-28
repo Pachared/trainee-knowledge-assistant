@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -19,12 +20,13 @@ import type { ApiDocument } from "@/components/app/types";
 
 type UploadViewProps = {
   documents: ApiDocument[];
+  status?: string;
   onUpload: (file: File) => Promise<void>;
   onDeleteDocument: (documentId: string) => Promise<void>;
   onReindexDocument: (documentId: string) => Promise<void>;
 };
 
-export function UploadView({ documents, onUpload, onDeleteDocument, onReindexDocument }: UploadViewProps) {
+export function UploadView({ documents, status, onUpload, onDeleteDocument, onReindexDocument }: UploadViewProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
@@ -77,6 +79,11 @@ export function UploadView({ documents, onUpload, onDeleteDocument, onReindexDoc
           <Typography color="text.secondary" sx={{ mb: 3, fontSize: { xs: 17, md: 19 } }}>
             ระบบจะแยก text, chunk, ฝัง embedding และส่งเข้า Chroma สำหรับถามตอบจาก context
           </Typography>
+          {status ? (
+            <Alert severity={status.includes("ไม่สำเร็จ") || status.includes("failed") ? "warning" : "info"} sx={{ mb: 2 }}>
+              {status}
+            </Alert>
+          ) : null}
 
           <Paper elevation={0} sx={{ display: "grid", gap: 2, border: 1, borderColor: "divider", p: 3 }}>
             <Button

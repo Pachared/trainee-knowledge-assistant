@@ -385,6 +385,7 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
         {view === "upload" ? (
           <UploadView
             documents={documents}
+            status={status}
             onUpload={uploadFile}
             onDeleteDocument={deleteDocument}
             onReindexDocument={reindexDocument}

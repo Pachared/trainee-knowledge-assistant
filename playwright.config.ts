@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const e2eDatabasePath = `${process.cwd()}/prisma/integration-e2e-${Date.now()}.db`;
+const e2eDatabaseUrl = `file:${e2eDatabasePath}`;
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
@@ -14,7 +17,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "npm run build && npx prisma migrate deploy && npm run db:seed && mkdir -p .next/standalone/.next/static .next/standalone/public && rsync -a .next/static/ .next/standalone/.next/static/ && rsync -a public/ .next/standalone/public/ && cd .next/standalone && HOSTNAME=127.0.0.1 PORT=3100 node server.js",
+      `DATABASE_URL=${e2eDatabaseUrl} npm run build && node -e "const fs=require('node:fs'); fs.closeSync(fs.openSync('${e2eDatabasePath}','a'))" && DATABASE_URL=${e2eDatabaseUrl} npx prisma migrate deploy && DATABASE_URL=${e2eDatabaseUrl} npm run db:seed && mkdir -p .next/standalone/.next/static .next/standalone/public && rsync -a .next/static/ .next/standalone/.next/static/ && rsync -a public/ .next/standalone/public/ && cd .next/standalone && DATABASE_URL=${e2eDatabaseUrl} HOSTNAME=127.0.0.1 PORT=3100 node server.js`,
     url: "http://127.0.0.1:3100/api/health",
     reuseExistingServer: false,
     timeout: 120_000

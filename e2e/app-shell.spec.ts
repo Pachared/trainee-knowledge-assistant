@@ -104,8 +104,9 @@ test.describe("management actions", () => {
 
     await page.getByRole("button", { name: `จัดการแชท ${originalTitle}`, exact: true }).click();
     await page.getByRole("menuitem", { name: "เปลี่ยนชื่อแชท" }).click();
-    await page.getByLabel("ชื่อแชท").fill(renamedTitle);
-    await page.getByRole("button", { name: "บันทึก" }).click();
+    const renameDialog = page.getByRole("dialog", { name: "เปลี่ยนชื่อแชท" });
+    await renameDialog.getByRole("textbox", { name: "ชื่อแชท" }).fill(renamedTitle);
+    await renameDialog.getByRole("button", { name: "บันทึก" }).click();
 
     await expect(page.getByText("เปลี่ยนชื่อแชทเรียบร้อย")).toBeVisible();
     await expect(page.getByText(renamedTitle, { exact: true })).toBeVisible();
