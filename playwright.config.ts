@@ -9,14 +9,15 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://127.0.0.1:3100",
     trace: "on-first-retry"
   },
   webServer: {
-    command: "npm run dev -- -H 127.0.0.1",
-    url: "http://127.0.0.1:3000/api/health",
-    reuseExistingServer: true,
-    timeout: 60_000
+    command:
+      "npm run build && npx prisma migrate deploy && npm run db:seed && mkdir -p .next/standalone/.next/static .next/standalone/public && rsync -a .next/static/ .next/standalone/.next/static/ && rsync -a public/ .next/standalone/public/ && cd .next/standalone && HOSTNAME=127.0.0.1 PORT=3100 node server.js",
+    url: "http://127.0.0.1:3100/api/health",
+    reuseExistingServer: false,
+    timeout: 120_000
   },
   projects: [
     {
