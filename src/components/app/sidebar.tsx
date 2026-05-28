@@ -1,12 +1,19 @@
 "use client";
 
+import { useState, type MouseEvent } from "react";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -24,6 +31,8 @@ type SidebarProps = {
   onSearchChange: (value: string) => void;
   onNewChat: () => void;
   onSelectChat: (chatId: string) => void;
+  onRenameChat: (chatId: string, title: string) => Promise<void>;
+  onDeleteChat: (chatId: string) => Promise<void>;
   onClose?: () => void;
 };
 
@@ -35,8 +44,54 @@ export function Sidebar({
   onSearchChange,
   onNewChat,
   onSelectChat,
+  onRenameChat,
+  onDeleteChat,
   onClose
 }: SidebarProps) {
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [selectedChat, setSelectedChat] = useState<ApiChat | null>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTitle, setRenameTitle] = useState("");
+
+  function openMenu(event: MouseEvent<HTMLElement>, chat: ApiChat) {
+    event.stopPropagation();
+    setMenuAnchor(event.currentTarget);
+    setSelectedChat(chat);
+  }
+
+  function closeMenu() {
+    setMenuAnchor(null);
+  }
+
+  function beginRename() {
+    if (!selectedChat) {
+      return;
+    }
+    setRenameTitle(selectedChat.title);
+    setRenameOpen(true);
+    closeMenu();
+  }
+
+  async function submitRename() {
+    if (!selectedChat || !renameTitle.trim()) {
+      return;
+    }
+    await onRenameChat(selectedChat.id, renameTitle.trim());
+    setRenameOpen(false);
+    setSelectedChat(null);
+  }
+
+  async function submitDelete() {
+    if (!selectedChat || !window.confirm(`ลบแชท "${selectedChat.title}"?`)) {
+      closeMenu();
+      return;
+    }
+    const chatId = selectedChat.id;
+    closeMenu();
+    setSelectedChat(null);
+    await onDeleteChat(chatId);
+  }
+
   return (
     <Box
       component="aside"
@@ -132,7 +187,15 @@ export function Sidebar({
                 <Typography variant="body2" noWrap sx={{ minWidth: 0, flex: 1, fontWeight: chat.id === currentChatId ? 800 : 500 }}>
                   {chat.title}
                 </Typography>
-                <MoreHorizOutlinedIcon sx={{ color: "text.secondary", fontSize: 18, ml: 1 }} />
+                <IconButton
+                  type="button"
+                  aria-label={`จัดการแชท ${chat.title}`}
+                  size="small"
+                  onClick={(event) => openMenu(event, chat)}
+                  sx={{ ml: 1, color: "text.secondary" }}
+                >
+                  <MoreHorizOutlinedIcon sx={{ fontSize: 18 }} />
+                </IconButton>
               </ListItemButton>
             ))
           ) : (
@@ -156,6 +219,40 @@ export function Sidebar({
           </Typography>
         </Box>
       </Stack>
+
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
+        <MenuItem onClick={beginRename}>เปลี่ยนชื่อแชท</MenuItem>
+        <MenuItem onClick={() => void submitDelete()} sx={{ color: "error.main" }}>
+          ลบแชท
+        </MenuItem>
+      </Menu>
+
+      <Dialog open={renameOpen} onClose={() => setRenameOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>เปลี่ยนชื่อแชท</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            label="ชื่อแชท"
+            value={renameTitle}
+            onChange={(event) => setRenameTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                void submitRename();
+              }
+            }}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" onClick={() => setRenameOpen(false)}>
+            ยกเลิก
+          </Button>
+          <Button type="button" variant="contained" onClick={() => void submitRename()} disabled={!renameTitle.trim()}>
+            บันทึก
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

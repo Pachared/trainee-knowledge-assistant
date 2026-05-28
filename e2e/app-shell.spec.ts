@@ -41,7 +41,7 @@ test.describe("desktop shell", () => {
     await expect(page.getByLabel("ค้นหาแชท")).toBeVisible();
     await expect(page.getByText("ประวัติแชท", { exact: true })).toBeVisible();
     await expect(page.getByPlaceholder("ถามอะไรก็ได้")).toBeVisible();
-    await expect(page.getByRole("button", { name: "อัปโหลด" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "อัปโหลด" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Token usage" })).toBeVisible();
   });
 });
@@ -56,13 +56,13 @@ test.describe("mobile drawer", () => {
     await expect(page.getByPlaceholder("ถามอะไรก็ได้")).toBeVisible();
     await page.getByRole("button", { name: "เปิด sidebar" }).tap();
 
-    await expect(page.getByRole("button", { name: "เปิด sidebar" })).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByText("Knowledge AI")).toBeVisible();
-    await expect(page.getByRole("button", { name: "แชทใหม่" }).first()).toBeVisible();
-    await expect(page.getByLabel("ค้นหาแชท")).toBeVisible();
-    await expect(page.getByText("ประวัติแชท", { exact: true })).toBeVisible();
+    const drawer = page.getByRole("presentation").filter({ hasText: "Knowledge AI" });
+    await expect(drawer.getByText("Knowledge AI")).toBeVisible();
+    await expect(drawer.getByRole("button", { name: "แชทใหม่" })).toBeVisible();
+    await expect(drawer.getByLabel("ค้นหาแชท")).toBeVisible();
+    await expect(drawer.getByText("ประวัติแชท", { exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "ปิด sidebar" }).click();
-    await expect(page.getByText("Knowledge AI")).toBeHidden();
+    await drawer.getByRole("button", { name: "ปิด sidebar" }).click();
+    await expect(drawer).toBeHidden();
   });
 });

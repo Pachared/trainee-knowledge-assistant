@@ -34,6 +34,11 @@ export async function indexChunksInChroma(input: {
   });
 }
 
+export async function deleteDocumentFromChroma(documentId: string) {
+  const collection = await getChromaCollection();
+  await collection.delete({ where: { documentId } });
+}
+
 export async function retrieveContext(input: {
   userId: string;
   query: string;

@@ -39,6 +39,41 @@ export async function createChat(userId: string, title = "แชทใหม่"
   });
 }
 
+export async function renameChat(userId: string, chatSessionId: string, title: string) {
+  const chat = await prisma.chatSession.findFirst({
+    where: {
+      id: chatSessionId,
+      userId
+    }
+  });
+
+  if (!chat) {
+    throw new Error("ไม่พบแชทนี้");
+  }
+
+  return prisma.chatSession.update({
+    where: { id: chatSessionId },
+    data: { title }
+  });
+}
+
+export async function deleteChat(userId: string, chatSessionId: string) {
+  const chat = await prisma.chatSession.findFirst({
+    where: {
+      id: chatSessionId,
+      userId
+    }
+  });
+
+  if (!chat) {
+    throw new Error("ไม่พบแชทนี้");
+  }
+
+  await prisma.chatSession.delete({
+    where: { id: chatSessionId }
+  });
+}
+
 export async function getChatMessages(userId: string, chatSessionId: string) {
   const chat = await prisma.chatSession.findFirst({
     where: {

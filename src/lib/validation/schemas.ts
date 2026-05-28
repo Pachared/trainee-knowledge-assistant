@@ -9,6 +9,10 @@ export const createChatSchema = z.object({
   title: z.string().trim().max(120).optional()
 });
 
+export const renameChatSchema = z.object({
+  title: z.string().trim().min(1).max(120)
+});
+
 export const chatPromptSchema = z.object({
   sessionId: z.string().min(1).optional(),
   message: z.string().trim().min(1).max(20_000),

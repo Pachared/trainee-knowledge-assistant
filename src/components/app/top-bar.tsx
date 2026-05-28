@@ -80,8 +80,6 @@ export function TopBar({ view, sidebarOpen = false, onOpenSidebar, onNewChat }: 
         <IconButton
           type="button"
           onClick={onOpenSidebar}
-          onPointerDown={onOpenSidebar}
-          onTouchStart={onOpenSidebar}
           aria-label="เปิด sidebar"
           aria-expanded={sidebarOpen}
         >

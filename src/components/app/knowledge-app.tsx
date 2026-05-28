@@ -20,6 +20,7 @@ type ApiEnvelope<T> = {
   data?: T;
   error?: {
     message: string;
+    details?: unknown;
   };
 };
 
@@ -120,6 +121,36 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
     router.push("/chat");
   }
 
+  async function renameChat(chatId: string, title: string) {
+    try {
+      const data = await fetchJson<{ chat: ApiChat }>(`/api/chats/${chatId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title })
+      });
+      setChats((previous) => previous.map((chat) => (chat.id === chatId ? { ...chat, title: data.chat.title } : chat)));
+      setStatus("เปลี่ยนชื่อแชทเรียบร้อย");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "เปลี่ยนชื่อแชทไม่สำเร็จ");
+    }
+  }
+
+  async function deleteChat(chatId: string) {
+    try {
+      await fetchJson<{ deleted: boolean }>(`/api/chats/${chatId}`, {
+        method: "DELETE"
+      });
+      setChats((previous) => previous.filter((chat) => chat.id !== chatId));
+      if (currentChatId === chatId) {
+        setCurrentChatId(undefined);
+        setMessages([]);
+      }
+      setStatus("ลบแชทเรียบร้อย");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "ลบแชทไม่สำเร็จ");
+    }
+  }
+
   async function uploadFile(file: File) {
     const formData = new FormData();
     formData.set("file", file);
@@ -138,6 +169,38 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ");
+    }
+  }
+
+  async function deleteDocument(documentId: string) {
+    try {
+      await fetchJson<{ deleted: boolean }>(`/api/documents/${documentId}`, {
+        method: "DELETE"
+      });
+      await loadDocuments();
+      setStatus("ลบเอกสารเรียบร้อย");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "ลบเอกสารไม่สำเร็จ");
+    }
+  }
+
+  async function reindexDocument(documentId: string) {
+    try {
+      const response = await fetch(`/api/documents/${documentId}/reindex`, { method: "POST" });
+      const payload = (await response.json()) as ApiEnvelope<{ document: ApiDocument }>;
+
+      await loadDocuments();
+
+      if (!response.ok || !payload.ok) {
+        const details = payload.error?.details as { document?: ApiDocument } | undefined;
+        setStatus(details?.document?.failedReason || payload.error?.message || "re-index Chroma ไม่สำเร็จ");
+        return;
+      }
+
+      setStatus(payload.data?.document.failedReason || "re-index Chroma เรียบร้อย");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "re-index Chroma ไม่สำเร็จ");
+      await loadDocuments();
     }
   }
 
@@ -264,6 +327,8 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
           onSearchChange={setSearch}
           onNewChat={newChat}
           onSelectChat={selectChat}
+          onRenameChat={renameChat}
+          onDeleteChat={deleteChat}
         />
       </Box>
 
@@ -271,7 +336,6 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
         anchor="left"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        ModalProps={{ keepMounted: true }}
         slotProps={{
           paper: {
             sx: {
@@ -291,6 +355,8 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
           onSearchChange={setSearch}
           onNewChat={newChat}
           onSelectChat={selectChat}
+          onRenameChat={renameChat}
+          onDeleteChat={deleteChat}
           onClose={() => setDrawerOpen(false)}
         />
       </Drawer>
@@ -316,7 +382,14 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
             onUpload={uploadFile}
           />
         ) : null}
-        {view === "upload" ? <UploadView documents={documents} onUpload={uploadFile} /> : null}
+        {view === "upload" ? (
+          <UploadView
+            documents={documents}
+            onUpload={uploadFile}
+            onDeleteDocument={deleteDocument}
+            onReindexDocument={reindexDocument}
+          />
+        ) : null}
         {view === "usage" ? <UsageView usage={usage} /> : null}
       </Box>
     </Box>

@@ -7,6 +7,7 @@ type ChromaCollection = {
     embeddings: number[][];
     metadatas: Record<string, string | number | boolean>[];
   }): Promise<void>;
+  delete(input: { ids?: string[]; where?: Record<string, string | number | boolean> }): Promise<void>;
   query(input: {
     queryEmbeddings: number[][];
     nResults: number;

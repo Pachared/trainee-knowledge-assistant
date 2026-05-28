@@ -22,12 +22,18 @@ type ApiEnvelope<T> = {
   data?: T;
   error?: {
     message: string;
+    details?: unknown;
   };
 };
 
 type Routes = {
   loginPost: (request: Request) => Promise<Response>;
+  chatSessionPost: (request: Request) => Promise<Response>;
+  chatPatch: (request: Request, context: { params: Promise<{ chatId: string }> }) => Promise<Response>;
+  chatDelete: (request: Request, context: { params: Promise<{ chatId: string }> }) => Promise<Response>;
   uploadPost: (request: Request) => Promise<Response>;
+  documentDelete: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
+  documentReindex: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   chatPost: (request: Request) => Promise<Response>;
   usageGet: () => Promise<Response>;
 };
@@ -104,9 +110,14 @@ describe("knowledge assistant API flow", () => {
     await mkdir(uploadDir, { recursive: true });
     await applyMigration();
 
-    const [loginRoute, uploadRoute, chatRoute, usageRoute, db] = await Promise.all([
+    const [loginRoute, chatsRoute, chatActionsRoute, uploadRoute, documentActionsRoute, documentReindexRoute, chatRoute, usageRoute, db] =
+      await Promise.all([
       import("@/app/api/auth/login/route"),
+      import("@/app/api/chats/route"),
+      import("@/app/api/chats/[chatId]/route"),
       import("@/app/api/upload/route"),
+      import("@/app/api/documents/[documentId]/route"),
+      import("@/app/api/documents/[documentId]/reindex/route"),
       import("@/app/api/chat/route"),
       import("@/app/api/usage/route"),
       import("@/lib/db/prisma")
@@ -114,7 +125,12 @@ describe("knowledge assistant API flow", () => {
 
     routes = {
       loginPost: loginRoute.POST,
+      chatSessionPost: chatsRoute.POST,
+      chatPatch: chatActionsRoute.PATCH,
+      chatDelete: chatActionsRoute.DELETE,
       uploadPost: uploadRoute.POST,
+      documentDelete: documentActionsRoute.DELETE,
+      documentReindex: documentReindexRoute.POST,
       chatPost: chatRoute.POST,
       usageGet: usageRoute.GET
     };
@@ -191,6 +207,23 @@ describe("knowledge assistant API flow", () => {
     expect(storedFailedPdf.failedReason).toEqual(expect.any(String));
     expect(storedFailedPdf.failedReason?.length).toBeGreaterThan(0);
 
+    const reindexResponse = await routes.documentReindex(
+      new Request(`http://test.local/api/documents/${txtUpload.payload.data?.document.id}/reindex`, {
+        method: "POST"
+      }),
+      { params: Promise.resolve({ documentId: txtUpload.payload.data?.document.id ?? "" }) }
+    );
+    const reindexPayload = await parseJson<{ document: { id: string; status: string; failedReason?: string | null } }>(
+      reindexResponse
+    );
+    const reindexDetails = reindexPayload.error?.details as
+      | { document?: { id: string; status: string; failedReason?: string | null } }
+      | undefined;
+
+    expect(reindexResponse.status).toBe(400);
+    expect(reindexDetails?.document?.status).toBe("ready_without_chroma");
+    expect(reindexDetails?.document?.failedReason).toContain("Chroma indexing failed");
+
     const chatResponse = await routes.chatPost(
       new Request("http://test.local/api/chat", {
         method: "POST",
@@ -220,5 +253,46 @@ describe("knowledge assistant API flow", () => {
     expect(usagePayload.data?.usage.length).toBeGreaterThan(0);
     expect(usagePayload.data?.usage[0]?.messageCount).toBeGreaterThan(0);
     expect(usagePayload.data?.usage[0]?.totalTokens).toBeGreaterThan(0);
+
+    const manualChatResponse = await routes.chatSessionPost(
+      new Request("http://test.local/api/chats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "ชื่อเดิม" })
+      })
+    );
+    const manualChatPayload = await parseJson<{ chat: { id: string; title: string } }>(manualChatResponse);
+    const manualChatId = manualChatPayload.data?.chat.id ?? "";
+
+    const renameResponse = await routes.chatPatch(
+      new Request(`http://test.local/api/chats/${manualChatId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "ชื่อใหม่" })
+      }),
+      { params: Promise.resolve({ chatId: manualChatId }) }
+    );
+    const renamePayload = await parseJson<{ chat: { id: string; title: string } }>(renameResponse);
+
+    expect(renameResponse.status).toBe(200);
+    expect(renamePayload.data?.chat.title).toBe("ชื่อใหม่");
+
+    const deleteChatResponse = await routes.chatDelete(
+      new Request(`http://test.local/api/chats/${manualChatId}`, { method: "DELETE" }),
+      { params: Promise.resolve({ chatId: manualChatId }) }
+    );
+
+    expect(deleteChatResponse.status).toBe(200);
+    await expect(prisma.chatSession.findFirstOrThrow({ where: { id: manualChatId } })).rejects.toThrow();
+
+    const deleteDocumentResponse = await routes.documentDelete(
+      new Request(`http://test.local/api/documents/${pdfUpload.payload.data?.document.id}`, { method: "DELETE" }),
+      { params: Promise.resolve({ documentId: pdfUpload.payload.data?.document.id ?? "" }) }
+    );
+
+    expect(deleteDocumentResponse.status).toBe(200);
+    await expect(
+      prisma.document.findFirstOrThrow({ where: { id: pdfUpload.payload.data?.document.id } })
+    ).rejects.toThrow();
   }, 30_000);
 });

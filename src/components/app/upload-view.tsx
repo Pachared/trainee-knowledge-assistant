@@ -4,20 +4,26 @@ import { useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import DriveFolderUploadOutlinedIcon from "@mui/icons-material/DriveFolderUploadOutlined";
+import SyncOutlinedIcon from "@mui/icons-material/SyncOutlined";
 import type { ApiDocument } from "@/components/app/types";
 
 type UploadViewProps = {
   documents: ApiDocument[];
   onUpload: (file: File) => Promise<void>;
+  onDeleteDocument: (documentId: string) => Promise<void>;
+  onReindexDocument: (documentId: string) => Promise<void>;
 };
 
-export function UploadView({ documents, onUpload }: UploadViewProps) {
+export function UploadView({ documents, onUpload, onDeleteDocument, onReindexDocument }: UploadViewProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
 
   async function handleFile(file?: File) {
     if (!file) {
@@ -25,8 +31,32 @@ export function UploadView({ documents, onUpload }: UploadViewProps) {
     }
 
     setUploading(true);
-    await onUpload(file);
-    setUploading(false);
+    try {
+      await onUpload(file);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDelete(document: ApiDocument) {
+    if (!window.confirm(`ลบเอกสาร "${document.title}"?`)) {
+      return;
+    }
+    setBusyDocumentId(document.id);
+    try {
+      await onDeleteDocument(document.id);
+    } finally {
+      setBusyDocumentId(null);
+    }
+  }
+
+  async function handleReindex(document: ApiDocument) {
+    setBusyDocumentId(document.id);
+    try {
+      await onReindexDocument(document.id);
+    } finally {
+      setBusyDocumentId(null);
+    }
   }
 
   return (
@@ -100,7 +130,28 @@ export function UploadView({ documents, onUpload }: UploadViewProps) {
                       </Typography>
                     ) : null}
                   </Box>
-                  <Chip size="small" label={document.status} />
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", justifyContent: { xs: "flex-start", sm: "flex-end" } }}>
+                    <Chip size="small" label={document.status} />
+                    <IconButton
+                      type="button"
+                      aria-label={`re-index Chroma ${document.title}`}
+                      size="small"
+                      disabled={busyDocumentId === document.id}
+                      onClick={() => void handleReindex(document)}
+                    >
+                      <SyncOutlinedIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      type="button"
+                      aria-label={`ลบเอกสาร ${document.title}`}
+                      size="small"
+                      disabled={busyDocumentId === document.id}
+                      onClick={() => void handleDelete(document)}
+                      color="error"
+                    >
+                      <DeleteOutlineOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Stack>
                 </Paper>
               ))
             ) : (

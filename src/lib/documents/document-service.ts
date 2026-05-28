@@ -1,3 +1,4 @@
+import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
@@ -5,7 +6,7 @@ import { getNumberEnv } from "@/lib/env";
 import { saveUpload } from "@/lib/documents/file-storage";
 import { extractTextFromFile } from "@/lib/documents/extract-text";
 import { chunkText } from "@/lib/rag/chunker";
-import { indexChunksInChroma } from "@/lib/rag/rag-service";
+import { deleteDocumentFromChroma, indexChunksInChroma } from "@/lib/rag/rag-service";
 import { uploadConstraints } from "@/lib/validation/schemas";
 
 function validateUpload(file: File) {
@@ -127,4 +128,87 @@ export async function listDocuments(userId: string) {
       }
     }
   });
+}
+
+export async function deleteDocument(userId: string, documentId: string) {
+  const document = await prisma.document.findFirst({
+    where: {
+      id: documentId,
+      userId
+    }
+  });
+
+  if (!document) {
+    throw new Error("ไม่พบเอกสารนี้");
+  }
+
+  await deleteDocumentFromChroma(document.id).catch(() => undefined);
+  await prisma.document.delete({
+    where: { id: document.id }
+  });
+  await unlink(document.path).catch(() => undefined);
+}
+
+export async function reindexDocument(userId: string, documentId: string) {
+  const document = await prisma.document.findFirst({
+    where: {
+      id: documentId,
+      userId
+    },
+    include: {
+      chunks: {
+        orderBy: { chunkIndex: "asc" }
+      }
+    }
+  });
+
+  if (!document) {
+    throw new Error("ไม่พบเอกสารนี้");
+  }
+
+  if (!document.chunks.length) {
+    const updated = await prisma.document.update({
+      where: { id: document.id },
+      data: {
+        status: "failed",
+        failedReason: "ไม่สามารถ re-index ได้ เพราะเอกสารนี้ไม่มี chunks"
+      }
+    });
+    throw new Error(updated.failedReason ?? "ไม่สามารถ re-index ได้");
+  }
+
+  try {
+    await deleteDocumentFromChroma(document.id).catch(() => undefined);
+    await indexChunksInChroma({
+      userId,
+      documentId: document.id,
+      chunks: document.chunks.map((chunk) => ({
+        id: chunk.id,
+        chromaId: chunk.chromaId,
+        content: chunk.content,
+        chunkIndex: chunk.chunkIndex
+      }))
+    });
+
+    return prisma.document.update({
+      where: { id: document.id },
+      data: {
+        status: "ready",
+        failedReason: null
+      }
+    });
+  } catch (error) {
+    const failedReason = `Chroma indexing failed: ${formatFailureReason(error)}`;
+    const updated = await prisma.document.update({
+      where: { id: document.id },
+      data: {
+        status: "ready_without_chroma",
+        failedReason
+      }
+    });
+
+    const reindexError = new Error(failedReason) as Error & { document?: typeof updated };
+    reindexError.document = updated;
+    throw reindexError;
+  }
 }
