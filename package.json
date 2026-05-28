@@ -29,7 +29,7 @@
     "lucide-react": "latest",
     "next": "latest",
     "openai": "latest",
-    "pdf-parse": "latest",
+    "pdf-parse": "^1.1.1",
     "react": "latest",
     "react-dom": "latest",
     "react-markdown": "latest",
