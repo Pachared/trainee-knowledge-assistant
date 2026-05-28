@@ -31,34 +31,35 @@ model ChatSession {
 }
 
 model Message {
-  id            String       @id @default(cuid())
+  id            String      @id @default(cuid())
   chatSessionId String
-  chatSession   ChatSession  @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
   role          String
   content       String
-  promptTokens  Int          @default(0)
-  outputTokens  Int          @default(0)
+  promptTokens  Int         @default(0)
+  outputTokens  Int         @default(0)
   citedChunkIds String?
   model         String?
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime    @default(now())
   usage         TokenUsage?
 
   @@index([chatSessionId, createdAt])
 }
 
 model Document {
-  id        String          @id @default(cuid())
-  userId    String
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  filename  String
-  mimeType  String
-  size      Int
-  path      String
-  status    String          @default("processing")
-  chunks    DocumentChunk[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  filename     String
+  mimeType     String
+  size         Int
+  path         String
+  status       String          @default("processing")
+  failedReason String?
+  chunks       DocumentChunk[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 
   @@index([userId, createdAt])
 }

@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { PrismaClient } from "@prisma/client";
@@ -57,6 +57,7 @@ async function uploadFile(routes: Routes, file: File) {
       document: {
         id: string;
         status: string;
+        failedReason?: string | null;
         chunks: Array<{ id: string }>;
       };
     }>(response)
@@ -65,18 +66,23 @@ async function uploadFile(routes: Routes, file: File) {
 
 async function applyMigration() {
   const setupPrisma = new PrismaClient();
-  const migration = await readFile(
-    join(process.cwd(), "prisma/migrations/20260528172000_init/migration.sql"),
-    "utf8"
-  );
-  const statements = migration
-    .split(";")
-    .map((statement) => statement.trim())
-    .filter(Boolean);
+  const migrationsDir = join(process.cwd(), "prisma/migrations");
+  const migrationFiles = (await readdir(migrationsDir, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(migrationsDir, entry.name, "migration.sql"))
+    .sort();
 
   try {
-    for (const statement of statements) {
-      await setupPrisma.$executeRawUnsafe(statement);
+    for (const migrationFile of migrationFiles) {
+      const migration = await readFile(migrationFile, "utf8");
+      const statements = migration
+        .split(";")
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+
+      for (const statement of statements) {
+        await setupPrisma.$executeRawUnsafe(statement);
+      }
     }
   } finally {
     await setupPrisma.$disconnect();
@@ -151,6 +157,7 @@ describe("knowledge assistant API flow", () => {
     expect(txtUpload.response.status).toBe(201);
     expect(txtUpload.payload.data?.document.status).toMatch(/^ready/);
     expect(txtUpload.payload.data?.document.chunks.length).toBeGreaterThan(0);
+    expect(txtUpload.payload.data?.document.failedReason).toEqual(expect.any(String));
 
     const pdfFixture = await readFile(join(process.cwd(), "node_modules/pdf-parse/test/data/01-valid.pdf"));
     const pdfUpload = await uploadFile(
@@ -163,6 +170,26 @@ describe("knowledge assistant API flow", () => {
     expect(pdfUpload.response.status).toBe(201);
     expect(pdfUpload.payload.data?.document.status).toMatch(/^ready/);
     expect(pdfUpload.payload.data?.document.chunks.length).toBeGreaterThan(0);
+    expect(pdfUpload.payload.data?.document.failedReason).toEqual(expect.any(String));
+
+    const failedPdf = await uploadFile(
+      routes,
+      new File([Buffer.from("%PDF-1.4\nbroken pdf content")], "broken.pdf", {
+        type: "application/pdf"
+      })
+    );
+
+    expect(failedPdf.response.status).toBe(400);
+    expect(failedPdf.payload.error?.message).toEqual(expect.any(String));
+
+    const storedFailedPdf = await prisma.document.findFirstOrThrow({
+      where: { filename: { contains: "broken" } },
+      orderBy: { createdAt: "desc" }
+    });
+
+    expect(storedFailedPdf.status).toBe("failed");
+    expect(storedFailedPdf.failedReason).toEqual(expect.any(String));
+    expect(storedFailedPdf.failedReason?.length).toBeGreaterThan(0);
 
     const chatResponse = await routes.chatPost(
       new Request("http://test.local/api/chat", {

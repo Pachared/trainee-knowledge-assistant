@@ -90,6 +90,15 @@ export function UploadView({ documents, onUpload }: UploadViewProps) {
                     <Typography variant="caption" color="text.secondary">
                       {document.filename} · {Math.ceil(document.size / 1024)} KB · {document._count?.chunks ?? 0} chunks
                     </Typography>
+                    {document.failedReason ? (
+                      <Typography
+                        variant="caption"
+                        color={document.status === "failed" ? "error.main" : "warning.main"}
+                        sx={{ mt: 0.5, display: "block", overflowWrap: "anywhere" }}
+                      >
+                        เหตุผล: {document.failedReason}
+                      </Typography>
+                    ) : null}
                   </Box>
                   <Chip size="small" label={document.status} />
                 </Paper>

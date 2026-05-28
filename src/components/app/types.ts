@@ -23,6 +23,7 @@ export type ApiDocument = {
   mimeType: string;
   size: number;
   status: string;
+  failedReason?: string | null;
   createdAt: string;
   _count?: {
     chunks: number;

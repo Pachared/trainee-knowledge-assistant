@@ -126,12 +126,16 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
     setStatus("กำลังประมวลผลเอกสาร...");
 
     try {
-      await fetchJson<{ document: ApiDocument }>("/api/upload", {
+      const data = await fetchJson<{ document: ApiDocument }>("/api/upload", {
         method: "POST",
         body: formData
       });
       await loadDocuments();
-      setStatus("อัปโหลดและ chunk เอกสารเรียบร้อย");
+      setStatus(
+        data.document.failedReason
+          ? `อัปโหลดแล้ว แต่มีข้อควรตรวจสอบ: ${data.document.failedReason}`
+          : "อัปโหลดและ chunk เอกสารเรียบร้อย"
+      );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ");
     }

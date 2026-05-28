@@ -25,6 +25,11 @@ function validateUpload(file: File) {
   }
 }
 
+function formatFailureReason(error: unknown) {
+  const message = error instanceof Error ? error.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
+  return message.slice(0, 1000);
+}
+
 export async function uploadDocument(userId: string, file: File) {
   validateUpload(file);
 
@@ -38,7 +43,8 @@ export async function uploadDocument(userId: string, file: File) {
       mimeType: file.type,
       size: file.size,
       path: saved.path,
-      status: "processing"
+      status: "processing",
+      failedReason: null
     }
   });
 
@@ -77,12 +83,15 @@ export async function uploadDocument(userId: string, file: File) {
       });
       await prisma.document.update({
         where: { id: document.id },
-        data: { status: "ready" }
+        data: { status: "ready", failedReason: null }
       });
-    } catch {
+    } catch (error) {
       await prisma.document.update({
         where: { id: document.id },
-        data: { status: "ready_without_chroma" }
+        data: {
+          status: "ready_without_chroma",
+          failedReason: `Chroma indexing failed: ${formatFailureReason(error)}`
+        }
       });
     }
 
@@ -97,7 +106,10 @@ export async function uploadDocument(userId: string, file: File) {
   } catch (error) {
     await prisma.document.update({
       where: { id: document.id },
-      data: { status: "failed" }
+      data: {
+        status: "failed",
+        failedReason: formatFailureReason(error)
+      }
     });
     throw error;
   }
