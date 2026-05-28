@@ -301,7 +301,7 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
           bgcolor: "background.default"
         }}
       >
-        <TopBar view={view} onOpenSidebar={() => setDrawerOpen(true)} onNewChat={newChat} />
+        <TopBar view={view} sidebarOpen={drawerOpen} onOpenSidebar={() => setDrawerOpen(true)} onNewChat={newChat} />
         {view === "chat" ? (
           <ChatView
             messages={messages}

@@ -16,6 +16,7 @@ import type { AppView } from "@/components/app/types";
 
 type TopBarProps = {
   view: AppView;
+  sidebarOpen?: boolean;
   onOpenSidebar: () => void;
   onNewChat: () => void;
 };
@@ -26,7 +27,7 @@ const titleByView: Record<AppView, string> = {
   usage: "Token Usage"
 };
 
-export function TopBar({ view, onOpenSidebar, onNewChat }: TopBarProps) {
+export function TopBar({ view, sidebarOpen = false, onOpenSidebar, onNewChat }: TopBarProps) {
   return (
     <>
       <Box
@@ -76,7 +77,14 @@ export function TopBar({ view, onOpenSidebar, onNewChat }: TopBarProps) {
           bgcolor: "background.paper"
         }}
       >
-        <IconButton type="button" onClick={onOpenSidebar} aria-label="เปิด sidebar">
+        <IconButton
+          type="button"
+          onClick={onOpenSidebar}
+          onPointerDown={onOpenSidebar}
+          onTouchStart={onOpenSidebar}
+          aria-label="เปิด sidebar"
+          aria-expanded={sidebarOpen}
+        >
           <MenuOutlinedIcon sx={{ fontSize: 28 }} />
         </IconButton>
         <Typography component="div" sx={{ fontSize: 18, fontWeight: 900 }} noWrap>
