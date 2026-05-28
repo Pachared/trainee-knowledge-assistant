@@ -8,6 +8,30 @@ type AssistantInput = {
   contexts: RetrievedContext[];
 };
 
+export type AssistantTokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  model: string;
+};
+
+type AssistantStreamOptions = {
+  onUsage?: (usage: AssistantTokenUsage) => void;
+};
+
+type ResponseStreamEvent = {
+  type?: string;
+  delta?: string;
+  response?: {
+    model?: string;
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+      total_tokens?: number;
+    } | null;
+  };
+};
+
 export function buildAssistantPrompt(input: AssistantInput) {
   const contextText = input.contexts.length
     ? input.contexts
@@ -34,7 +58,7 @@ export function buildAssistantPrompt(input: AssistantInput) {
   ].join("\n");
 }
 
-export async function* streamAssistantText(input: AssistantInput): AsyncGenerator<string> {
+export async function* streamAssistantText(input: AssistantInput, options: AssistantStreamOptions = {}): AsyncGenerator<string> {
   const client = getOpenAIClient();
   const model = getOpenAIModel();
 
@@ -55,7 +79,7 @@ export async function* streamAssistantText(input: AssistantInput): AsyncGenerato
     return;
   }
 
-  const stream = await (client.responses.create as unknown as (input: unknown) => Promise<AsyncIterable<{ type?: string; delta?: string }>>)({
+  const stream = await (client.responses.create as unknown as (input: unknown) => Promise<AsyncIterable<ResponseStreamEvent>>)({
     model,
     input: buildAssistantPrompt(input),
     stream: true
@@ -65,13 +89,33 @@ export async function* streamAssistantText(input: AssistantInput): AsyncGenerato
     if (event.type === "response.output_text.delta" && event.delta) {
       yield event.delta;
     }
+
+    if (event.type === "response.completed" && event.response?.usage) {
+      const promptTokens = event.response.usage.input_tokens ?? 0;
+      const completionTokens = event.response.usage.output_tokens ?? 0;
+
+      options.onUsage?.({
+        promptTokens,
+        completionTokens,
+        totalTokens: event.response.usage.total_tokens ?? promptTokens + completionTokens,
+        model: event.response.model || model
+      });
+    }
   }
 }
 
-export function summarizeUsage(input: { prompt: string; output: string; model?: string }) {
+export function summarizeUsage(input: { prompt: string; output: string; model?: string; actualUsage?: AssistantTokenUsage }) {
+  if (input.actualUsage) {
+    return input.actualUsage;
+  }
+
+  const promptTokens = estimateTokens(input.prompt);
+  const completionTokens = estimateTokens(input.output);
+
   return {
-    promptTokens: estimateTokens(input.prompt),
-    completionTokens: estimateTokens(input.output),
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
     model: input.model || getOpenAIModel()
   };
 }

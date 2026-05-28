@@ -5,7 +5,12 @@ import {
   getChatMessages,
   updateChatTitleFromPrompt
 } from "@/lib/chat/chat-service";
-import { buildAssistantPrompt, summarizeUsage, streamAssistantText } from "@/lib/ai/assistant-service";
+import {
+  type AssistantTokenUsage,
+  buildAssistantPrompt,
+  summarizeUsage,
+  streamAssistantText
+} from "@/lib/ai/assistant-service";
 import { getOpenAIModel } from "@/lib/ai/openai-client";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { jsonError, parseRouteError } from "@/lib/http/response";
@@ -57,6 +62,7 @@ export async function POST(request: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         let output = "";
+        let actualUsage: AssistantTokenUsage | undefined;
 
         try {
           controller.enqueue(
@@ -72,7 +78,10 @@ export async function POST(request: Request) {
             )
           );
 
-          for await (const chunk of streamAssistantText({ message, history, contexts })) {
+          for await (const chunk of streamAssistantText(
+            { message, history, contexts },
+            { onUsage: (usage) => (actualUsage = usage) }
+          )) {
             output += chunk;
             controller.enqueue(encoder.encode(sse("delta", { content: chunk })));
           }
@@ -80,7 +89,8 @@ export async function POST(request: Request) {
           const usage = summarizeUsage({
             prompt,
             output,
-            model: getOpenAIModel()
+            model: getOpenAIModel(),
+            actualUsage
           });
           const assistantMessage = await addAssistantMessage({
             chatSessionId: chat.id,
