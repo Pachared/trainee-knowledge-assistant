@@ -71,3 +71,17 @@ export function getChromaConfig() {
     collection: getOptionalEnv("CHROMA_COLLECTION", "trainee_knowledge_chunks")
   };
 }
+
+export function getCookieSecure() {
+  const raw = getOptionalEnv("COOKIE_SECURE").toLowerCase();
+
+  if (raw === "true") {
+    return true;
+  }
+
+  if (raw === "false") {
+    return false;
+  }
+
+  return process.env.NODE_ENV === "production";
+}

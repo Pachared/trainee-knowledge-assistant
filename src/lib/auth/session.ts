@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
-import { getSessionSecret } from "@/lib/env";
+import { getCookieSecure, getSessionSecret } from "@/lib/env";
 
 export const SESSION_COOKIE_NAME = "trainee_knowledge_session";
 
@@ -46,7 +46,7 @@ export function sessionCookieOptions() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: getCookieSecure(),
     path: "/",
     maxAge: 60 * 60 * 24 * 7
   };
