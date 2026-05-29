@@ -118,7 +118,7 @@ export function Sidebar({
       }}
     >
       <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", minHeight: 44, px: 1, pb: 1.75 }}>
-        <Typography variant="h6" component="div" sx={{ fontWeight: 900, fontSize: 20 }}>
+        <Typography variant="h6" component="div" sx={{ fontWeight: 900 }}>
           Knowledge AI
         </Typography>
         <IconButton type="button" onClick={onClose} aria-label="ปิด sidebar" size="small">

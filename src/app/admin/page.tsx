@@ -69,7 +69,7 @@ function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
     >
       <Stack spacing={2}>
         <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-          <Typography component="h2" sx={{ fontSize: 20, fontWeight: 900 }}>
+          <Typography variant="h6" component="h2" sx={{ fontWeight: 900 }}>
             {title}
           </Typography>
           <Chip icon={config.icon} label={config.label} color={config.color} size="small" variant="outlined" />
@@ -80,12 +80,12 @@ function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
         <Stack spacing={1.25}>
           {rows.map((row) => (
             <Stack key={row.label} direction="row" spacing={2} sx={{ justifyContent: "space-between" }}>
-              <Typography color="text.secondary" sx={{ fontSize: 14 }}>
+              <Typography variant="body2" color="text.secondary">
                 {row.label}
               </Typography>
               <Typography
+                variant="body2"
                 sx={{
-                  fontSize: 14,
                   fontWeight: 700,
                   textAlign: "right",
                   overflowWrap: "anywhere"
@@ -104,11 +104,12 @@ function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
               borderRadius: 1.5,
               bgcolor: "error.light",
               color: "error.contrastText",
-              fontSize: 13,
               overflowWrap: "anywhere"
             }}
           >
-            {message}
+            <Typography variant="caption" component="span">
+              {message}
+            </Typography>
           </Box>
         ) : null}
       </Stack>
@@ -126,10 +127,10 @@ export default async function AdminPage() {
         <Stack spacing={3}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ justifyContent: "space-between" }}>
             <Box>
-              <Typography component="h1" sx={{ fontSize: { xs: 32, md: 40 }, lineHeight: 1.05, fontWeight: 900 }}>
+              <Typography variant="h1" component="h1" sx={{ fontWeight: 900 }}>
                 Admin diagnostics
               </Typography>
-              <Typography color="text.secondary" sx={{ mt: 1, fontSize: 16 }}>
+              <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
                 ตรวจสถานะ OpenAI, Chroma, Database และ upload directory จากระบบจริง
               </Typography>
             </Box>

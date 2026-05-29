@@ -22,7 +22,7 @@ export function UsageView({ usage }: UsageViewProps) {
           <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
             Token Usage
           </Typography>
-          <Typography color="text.secondary" sx={{ mb: 3, fontSize: { xs: 17, md: 19 } }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
             แสดง token ต่อ session และเก็บ prompt/completion token ของแต่ละคำตอบใน SQLite
           </Typography>
 

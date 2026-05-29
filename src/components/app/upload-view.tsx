@@ -76,7 +76,7 @@ export function UploadView({ documents, status, onUpload, onDeleteDocument, onRe
           <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
             อัปโหลดเอกสาร
           </Typography>
-          <Typography color="text.secondary" sx={{ mb: 3, fontSize: { xs: 17, md: 19 } }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
             ระบบจะแยก text, chunk, ฝัง embedding และส่งเข้า Chroma สำหรับถามตอบจาก context
           </Typography>
           {status ? (

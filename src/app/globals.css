@@ -1,7 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap");
 
 :root {
-  --font-sans: Roboto, "Noto Sans Thai", Arial, sans-serif;
+  --font-latin: Roboto;
+  --font-thai: "Noto Sans Thai";
+  --font-sans: var(--font-latin), var(--font-thai), Arial, sans-serif;
 }
 
 * {
@@ -13,6 +15,16 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:lang(th) {
+  font-family: var(--font-latin), var(--font-thai), Arial, sans-serif;
+}
+
+:lang(en) {
+  font-family: var(--font-latin), Arial, sans-serif;
 }
 
 .markdown-body p {

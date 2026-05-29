@@ -125,7 +125,7 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
               onChange={(event) => setDocumentId(event.target.value)}
               displayEmpty
               aria-label="เลือกเอกสารสำหรับ RAG"
-              sx={{ bgcolor: "background.paper", borderRadius: 999, fontSize: 13 }}
+              sx={{ bgcolor: "background.paper", borderRadius: 999 }}
             >
               <MenuItem value="">ใช้เอกสารทั้งหมด</MenuItem>
               {documents.map((document) => (
