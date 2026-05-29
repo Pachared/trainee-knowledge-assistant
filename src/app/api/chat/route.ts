@@ -14,7 +14,7 @@ import {
 import { getOpenAIModel } from "@/lib/ai/openai-client";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { jsonError, parseRouteError } from "@/lib/http/response";
-import { retrieveContext } from "@/lib/rag/rag-service";
+import { isWholeDocumentSummaryRequest, retrieveContext, retrieveWholeDocumentContext } from "@/lib/rag/rag-service";
 import { recordUsage } from "@/lib/usage/usage-service";
 import { chatPromptSchema } from "@/lib/validation/schemas";
 import { clientIpFromHeaders, sanitizePlainText } from "@/lib/security/input";
@@ -48,12 +48,18 @@ export async function POST(request: Request) {
       await updateChatTitleFromPrompt(chat.id, message);
     }
 
-    const contexts = await retrieveContext({
-      userId: user.id,
-      query: message,
-      documentId: body.documentId,
-      limit: 5
-    });
+    const contexts =
+      body.documentId && isWholeDocumentSummaryRequest(message)
+        ? await retrieveWholeDocumentContext({
+            userId: user.id,
+            documentId: body.documentId
+          })
+        : await retrieveContext({
+            userId: user.id,
+            query: message,
+            documentId: body.documentId,
+            limit: 5
+          });
     const history = existingChat.messages.map((item) => ({
       role: item.role,
       content: item.content

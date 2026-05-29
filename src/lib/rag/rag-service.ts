@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { getNumberEnv } from "@/lib/env";
 import { embedText, embedTexts } from "@/lib/rag/embeddings";
 import { getChromaCollection } from "@/lib/rag/chroma";
 
@@ -8,6 +9,13 @@ export type RetrievedContext = {
   content: string;
   score: number;
 };
+
+const SUMMARY_INTENT_REGEX =
+  /(สรุป|ย่อความ|ใจความสำคัญ|ภาพรวม|ทั้งเอกสาร|ทั้งไฟล์|ทั้งหมด|summari[sz]e|summary|overview|entire document|whole document)/i;
+
+export function isWholeDocumentSummaryRequest(message: string) {
+  return SUMMARY_INTENT_REGEX.test(message);
+}
 
 export async function indexChunksInChroma(input: {
   userId: string;
@@ -111,4 +119,48 @@ export async function retrieveContext(input: {
     content: chunk.content,
     score: 0
   }));
+}
+
+export async function retrieveWholeDocumentContext(input: {
+  userId: string;
+  documentId: string;
+  maxChunks?: number;
+  maxTokens?: number;
+}): Promise<RetrievedContext[]> {
+  const maxChunks = input.maxChunks ?? getNumberEnv("FULL_DOCUMENT_CONTEXT_MAX_CHUNKS", 200);
+  const maxTokens = input.maxTokens ?? getNumberEnv("FULL_DOCUMENT_CONTEXT_MAX_TOKENS", 120_000);
+  const chunks = await prisma.documentChunk.findMany({
+    where: {
+      documentId: input.documentId,
+      document: {
+        userId: input.userId
+      }
+    },
+    include: {
+      document: true
+    },
+    orderBy: { chunkIndex: "asc" },
+    take: maxChunks
+  });
+
+  let usedTokens = 0;
+  const contexts: RetrievedContext[] = [];
+
+  for (const chunk of chunks) {
+    const nextTokens = usedTokens + chunk.tokenCount;
+
+    if (contexts.length > 0 && nextTokens > maxTokens) {
+      break;
+    }
+
+    usedTokens = nextTokens;
+    contexts.push({
+      chunkId: chunk.id,
+      documentTitle: chunk.document.title,
+      content: chunk.content,
+      score: 0
+    });
+  }
+
+  return contexts;
 }

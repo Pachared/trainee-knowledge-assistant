@@ -368,6 +368,39 @@ describe("knowledge assistant API flow", () => {
       bulkReindexPayload.data?.result.documents.find((document) => document.id === pendingReindexUpload.payload.data?.document.id)
     ).toMatchObject({ status: "ready", failedReason: null });
 
+    const longDocumentText = Array.from({ length: 9 }, (_, index) =>
+      [
+        `หัวข้อที่ ${index + 1}`,
+        "เนื้อหาสำหรับทดสอบการสรุปทั้งเอกสาร ต้องถูกส่งเข้า context เมื่อผู้ใช้ขอสรุปเอกสารทั้งหมด",
+        "รายละเอียดเพิ่มเติมเกี่ยวกับ Prisma SQLite Chroma OpenAI และการทำ RAG ในระบบนี้".repeat(18)
+      ].join("\n")
+    ).join("\n\n");
+    const longDocumentUpload = await uploadFile(
+      routes,
+      new File([longDocumentText], "long-summary.txt", {
+        type: "text/plain"
+      })
+    );
+
+    expect(longDocumentUpload.response.status).toBe(201);
+    expect(longDocumentUpload.payload.data?.document.chunks.length).toBeGreaterThan(5);
+
+    const summaryResponse = await routes.chatPost(
+      new Request("http://test.local/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId: longDocumentUpload.payload.data?.document.id,
+          message: "ช่วยสรุปเอกสารนี้ทั้งหมด"
+        })
+      })
+    );
+    const summaryEvents = await summaryResponse.text();
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryEvents).toContain('"index":6');
+    expect(summaryEvents.match(/long-summary/g)?.length).toBeGreaterThan(5);
+
     const chatResponse = await routes.chatPost(
       new Request("http://test.local/api/chat", {
         method: "POST",
