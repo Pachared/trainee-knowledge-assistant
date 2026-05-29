@@ -4,8 +4,8 @@
   --font-latin: Roboto;
   --font-thai: "Noto Sans Thai";
   --font-latin-stack: var(--font-latin), Arial, sans-serif;
-  --font-thai-stack: var(--font-thai), var(--font-latin), Arial, sans-serif;
-  --font-sans: var(--font-thai-stack);
+  --font-script-stack: var(--font-latin), var(--font-thai), Arial, sans-serif;
+  --font-sans: var(--font-script-stack);
 }
 
 * {
@@ -22,7 +22,7 @@ body {
 }
 
 :lang(th) {
-  font-family: var(--font-thai-stack);
+  font-family: var(--font-script-stack);
 }
 
 :lang(en) {
