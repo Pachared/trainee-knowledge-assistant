@@ -14,7 +14,7 @@
     "test:docker:rag": "node scripts/docker-full-rag-test.mjs",
     "test:watch": "vitest",
     "cleanup:e2e-db": "node scripts/cleanup-e2e-sqlite.mjs",
-    "dev:chroma": "docker compose up chroma",
+    "dev:chroma": "node scripts/start-local-chroma.mjs",
     "dev:stack": "docker compose up --build",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
