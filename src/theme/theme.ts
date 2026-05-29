@@ -59,25 +59,22 @@ export const appTheme = createTheme({
     allVariants: {
       letterSpacing: 0
     },
-    h1: responsiveType({ xs: 40, sm: 48, md: 48, lg: 56, lineHeight: 1.08, fontWeight: 600 }),
-    h2: responsiveType({ xs: 32, sm: 48, md: 48, lg: 56, lineHeight: 1.34, fontWeight: 600 }),
-    h3: responsiveType({ xs: 32, sm: 48, md: 48, lg: 56, lineHeight: 1.34, fontWeight: 600 }),
-    h4: responsiveType({ xs: 28, sm: 40, md: 40, lg: 48, lineHeight: 1.25, fontWeight: 600 }),
-    h5: responsiveType({ xs: 24, sm: 32, md: 32, lg: 40, lineHeight: 1.22, fontWeight: 600 }),
-    h6: responsiveType({ xs: 19, sm: 19, md: 17, lg: 17, lineHeight: 1.24, fontWeight: 600 }),
-    body1: responsiveType({ xs: 19, sm: 24, md: 24, lg: 28, lineHeight: 1.39 }),
-    body2: responsiveType({ xs: 17, sm: 17, md: 17, lg: 17, lineHeight: 1.47 }),
-    subtitle1: responsiveType({ xs: 21, sm: 24, md: 24, lg: 28, lineHeight: 1.35, fontWeight: 700 }),
-    subtitle2: responsiveType({ xs: 17, sm: 19, md: 19, lg: 21, lineHeight: 1.35, fontWeight: 700 }),
-    caption: responsiveType({ xs: 12, sm: 12, md: 12, lg: 12, lineHeight: 1.35, fontWeight: 600 }),
+    h1: responsiveType({ xs: 30, sm: 30, md: 32, lg: 34, lineHeight: 1.2, fontWeight: 600 }),
+    h2: responsiveType({ xs: 28, sm: 30, md: 30, lg: 32, lineHeight: 1.2, fontWeight: 600 }),
+    h3: responsiveType({ xs: 30, sm: 30, md: 30, lg: 30, lineHeight: 1.2, fontWeight: 500 }),
+    h4: responsiveType({ xs: 24, sm: 24, md: 24, lg: 26, lineHeight: 1.28, fontWeight: 600 }),
+    h5: responsiveType({ xs: 20, sm: 20, md: 20, lg: 22, lineHeight: 1.3, fontWeight: 600 }),
+    h6: responsiveType({ xs: 16, sm: 16, md: 16, lg: 17, lineHeight: 1.35, fontWeight: 600 }),
+    body1: responsiveType({ xs: 16, sm: 16, md: 16, lg: 16, lineHeight: 1.5 }),
+    body2: responsiveType({ xs: 14, sm: 14, md: 14, lg: 14, lineHeight: 1.43 }),
+    subtitle1: responsiveType({ xs: 18, sm: 18, md: 18, lg: 18, lineHeight: 1.55, fontWeight: 600 }),
+    subtitle2: responsiveType({ xs: 16, sm: 16, md: 16, lg: 16, lineHeight: 1.5, fontWeight: 600 }),
+    caption: responsiveType({ xs: 12, sm: 12, md: 12, lg: 12, lineHeight: 1.33, fontWeight: 500 }),
     button: {
       textTransform: "none",
-      fontWeight: 800,
+      fontWeight: 700,
       fontSize: "0.9375rem",
-      lineHeight: 1.25,
-      "@media (min-width:1024px)": {
-        fontSize: "1rem"
-      }
+      lineHeight: 1.35
     }
   },
   breakpoints: {
@@ -99,11 +96,8 @@ export const appTheme = createTheme({
           minHeight: "100%",
           overflow: "hidden",
           fontFamily,
-          fontSize: "17px",
-          lineHeight: 1.47,
-          "@media (min-width:1024px)": {
-            fontSize: "17px"
-          }
+          fontSize: "16px",
+          lineHeight: 1.5
         },
         a: {
           color: "inherit",
@@ -142,11 +136,20 @@ export const appTheme = createTheme({
           borderRadius: 8
         },
         input: {
-          fontSize: "0.9375rem",
-          lineHeight: 1.47,
-          "@media (min-width:1024px)": {
-            fontSize: "1rem"
-          }
+          fontSize: "1rem",
+          lineHeight: 1.5
+        }
+      }
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          fontSize: "0.875rem",
+          lineHeight: 1.43
+        },
+        shrink: {
+          fontSize: "0.8125rem",
+          lineHeight: 1.25
         }
       }
     },
@@ -160,22 +163,16 @@ export const appTheme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          fontWeight: 700,
-          fontSize: "0.8125rem",
-          "@media (min-width:1024px)": {
-            fontSize: "0.875rem"
-          }
+          fontWeight: 600,
+          fontSize: "0.8125rem"
         }
       }
     },
     MuiMenuItem: {
       styleOverrides: {
         root: {
-          fontSize: "0.9375rem",
-          lineHeight: 1.47,
-          "@media (min-width:1024px)": {
-            fontSize: "1rem"
-          }
+          fontSize: "0.875rem",
+          lineHeight: 1.43
         }
       }
     }
