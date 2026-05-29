@@ -155,8 +155,10 @@ export default async function AdminPage() {
                   { label: "API key configured", value: diagnostics.openai.keyConfigured },
                   { label: "Key count", value: diagnostics.openai.keyCount },
                   { label: "Chat model", value: diagnostics.openai.model },
-                  { label: "Embedding model", value: diagnostics.openai.embeddingModel }
+                  { label: "Embedding model", value: diagnostics.openai.embeddingModel },
+                  { label: "Live check", value: diagnostics.openai.liveStatus }
                 ]}
+                message={diagnostics.openai.message}
               />
             </Box>
             <Box>

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getChromaConfig, getOpenAIKeys } from "@/lib/env";
 import { getUploadDir } from "@/lib/documents/file-storage";
 import { getChromaCollection } from "@/lib/rag/chroma";
-import { getOpenAIEmbeddingModel, getOpenAIModel } from "@/lib/ai/openai-client";
+import { getOpenAIClient, getOpenAIEmbeddingModel, getOpenAIModel } from "@/lib/ai/openai-client";
 
 type DiagnosticStatus = "ok" | "warning" | "error";
 
@@ -85,29 +85,94 @@ async function checkUploadDirectory() {
   }
 }
 
-function checkOpenAI() {
-  const keys = getOpenAIKeys();
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, label: string) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
 
-  return {
-    status: (keys.length ? "ok" : "warning") as DiagnosticStatus,
-    keyConfigured: keys.length > 0,
-    keyCount: keys.length,
-    model: getOpenAIModel(),
-    embeddingModel: getOpenAIEmbeddingModel()
-  };
+  try {
+    return await Promise.race([operation, timeoutPromise]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+async function checkOpenAI() {
+  const keys = getOpenAIKeys();
+  const model = getOpenAIModel();
+  const embeddingModel = getOpenAIEmbeddingModel();
+
+  if (!keys.length) {
+    return {
+      status: "warning" as DiagnosticStatus,
+      keyConfigured: false,
+      keyCount: 0,
+      model,
+      embeddingModel,
+      liveStatus: "skipped"
+    };
+  }
+
+  const client = getOpenAIClient();
+
+  if (!client) {
+    return {
+      status: "warning" as DiagnosticStatus,
+      keyConfigured: true,
+      keyCount: keys.length,
+      model,
+      embeddingModel,
+      liveStatus: "skipped",
+      message: "OpenAI client could not be initialized."
+    };
+  }
+
+  try {
+    await withTimeout(
+      client.embeddings.create({
+        model: embeddingModel,
+        input: "diagnostics"
+      }),
+      8_000,
+      "OpenAI diagnostics"
+    );
+
+    return {
+      status: "ok" as DiagnosticStatus,
+      keyConfigured: true,
+      keyCount: keys.length,
+      model,
+      embeddingModel,
+      liveStatus: "ok"
+    };
+  } catch (error) {
+    return {
+      status: "error" as DiagnosticStatus,
+      keyConfigured: true,
+      keyCount: keys.length,
+      model,
+      embeddingModel,
+      liveStatus: "error",
+      message: errorMessage(error)
+    };
+  }
 }
 
 export async function getAdminDiagnostics() {
-  const [chroma, database, uploadDirectory] = await Promise.all([
+  const [chroma, database, uploadDirectory, openai] = await Promise.all([
     checkChroma(),
     checkDatabaseMigrations(),
-    checkUploadDirectory()
+    checkUploadDirectory(),
+    checkOpenAI()
   ]);
 
   return {
     chroma,
     database,
-    openai: checkOpenAI(),
+    openai,
     uploadDirectory
   };
 }

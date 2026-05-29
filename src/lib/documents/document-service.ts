@@ -212,3 +212,51 @@ export async function reindexDocument(userId: string, documentId: string) {
     throw reindexError;
   }
 }
+
+export async function reindexPendingDocuments(userId: string) {
+  const pendingDocuments = await prisma.document.findMany({
+    where: {
+      userId,
+      status: "ready_without_chroma"
+    },
+    select: {
+      id: true
+    },
+    orderBy: {
+      createdAt: "asc"
+    }
+  });
+  const results: Array<{ id: string; status: string; failedReason?: string | null }> = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const document of pendingDocuments) {
+    try {
+      const updated = await reindexDocument(userId, document.id);
+      results.push({
+        id: updated.id,
+        status: updated.status,
+        failedReason: updated.failedReason
+      });
+      succeeded += 1;
+    } catch (error) {
+      const errorDocument = error instanceof Error && "document" in error
+        ? (error as Error & { document?: { id: string; status: string; failedReason?: string | null } }).document
+        : undefined;
+
+      results.push({
+        id: errorDocument?.id ?? document.id,
+        status: errorDocument?.status ?? "ready_without_chroma",
+        failedReason: errorDocument?.failedReason ?? (error instanceof Error ? error.message : "re-index Chroma ไม่สำเร็จ")
+      });
+      failed += 1;
+    }
+  }
+
+  return {
+    total: pendingDocuments.length,
+    succeeded,
+    failed,
+    documents: results
+  };
+}

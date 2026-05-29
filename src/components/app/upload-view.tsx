@@ -24,13 +24,23 @@ type UploadViewProps = {
   onUpload: (file: File) => Promise<void>;
   onDeleteDocument: (documentId: string) => Promise<void>;
   onReindexDocument: (documentId: string) => Promise<void>;
+  onReindexAllDocuments: () => Promise<void>;
 };
 
-export function UploadView({ documents, status, onUpload, onDeleteDocument, onReindexDocument }: UploadViewProps) {
+export function UploadView({
+  documents,
+  status,
+  onUpload,
+  onDeleteDocument,
+  onReindexDocument,
+  onReindexAllDocuments
+}: UploadViewProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
+  const [bulkReindexing, setBulkReindexing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ApiDocument | null>(null);
+  const pendingReindexCount = documents.filter((document) => document.status === "ready_without_chroma").length;
 
   async function handleFile(file?: File) {
     if (!file) {
@@ -66,6 +76,15 @@ export function UploadView({ documents, status, onUpload, onDeleteDocument, onRe
       await onReindexDocument(document.id);
     } finally {
       setBusyDocumentId(null);
+    }
+  }
+
+  async function handleReindexAll() {
+    setBulkReindexing(true);
+    try {
+      await onReindexAllDocuments();
+    } finally {
+      setBulkReindexing(false);
     }
   }
 
@@ -108,9 +127,20 @@ export function UploadView({ documents, status, onUpload, onDeleteDocument, onRe
             />
           </Paper>
 
-          <Typography variant="h3" component="h3" sx={{ mt: 3.5, mb: 1.5 }}>
-            เอกสารล่าสุด
-          </Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 3.5, mb: 1.5, alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between" }}>
+            <Typography variant="h3" component="h3">
+              เอกสารล่าสุด
+            </Typography>
+            <Button
+              type="button"
+              variant="outlined"
+              startIcon={<SyncOutlinedIcon />}
+              disabled={!pendingReindexCount || bulkReindexing}
+              onClick={() => void handleReindexAll()}
+            >
+              {bulkReindexing ? "กำลัง re-index" : `Re-index ทั้งหมด (${pendingReindexCount})`}
+            </Button>
+          </Stack>
           <Stack spacing={1.25}>
             {documents.length ? (
               documents.map((document) => (

@@ -204,6 +204,35 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
     }
   }
 
+  async function reindexAllDocuments() {
+    try {
+      const data = await fetchJson<{
+        result: {
+          total: number;
+          succeeded: number;
+          failed: number;
+        };
+      }>("/api/documents/reindex", {
+        method: "POST"
+      });
+      await loadDocuments();
+
+      if (data.result.total === 0) {
+        setStatus("ไม่มีเอกสารที่ต้อง re-index");
+        return;
+      }
+
+      setStatus(
+        data.result.failed
+          ? `re-index สำเร็จ ${data.result.succeeded} รายการ และไม่สำเร็จ ${data.result.failed} รายการ`
+          : `re-index Chroma สำเร็จ ${data.result.succeeded} รายการ`
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "re-index Chroma ทั้งหมดไม่สำเร็จ");
+      await loadDocuments();
+    }
+  }
+
   async function sendMessage(message: string, documentId?: string) {
     if (streaming) {
       return;
@@ -389,6 +418,7 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
             onUpload={uploadFile}
             onDeleteDocument={deleteDocument}
             onReindexDocument={reindexDocument}
+            onReindexAllDocuments={reindexAllDocuments}
           />
         ) : null}
         {view === "usage" ? <UsageView usage={usage} /> : null}

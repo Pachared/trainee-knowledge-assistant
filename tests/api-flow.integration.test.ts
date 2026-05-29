@@ -11,6 +11,9 @@ const chromaState = vi.hoisted(() => ({
   failWrites: true,
   storedIds: [] as string[]
 }));
+const openAIState = vi.hoisted(() => ({
+  failEmbeddings: false
+}));
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({
@@ -29,9 +32,14 @@ vi.mock("chromadb", () => ({
           if (chromaState.failWrites) {
             throw new Error("mock Chroma write failed");
           }
-          chromaState.storedIds = input.ids;
+          chromaState.storedIds = Array.from(new Set([...chromaState.storedIds, ...input.ids]));
         },
-        delete: async () => {
+        delete: async (input?: { where?: { documentId?: string } }) => {
+          if (input?.where?.documentId) {
+            chromaState.storedIds = chromaState.storedIds.filter((id) => !id.startsWith(`${input.where?.documentId}-`));
+            return;
+          }
+
           chromaState.storedIds = [];
         },
         query: async () => ({
@@ -40,6 +48,39 @@ vi.mock("chromadb", () => ({
         })
       });
     }
+  }
+}));
+
+vi.mock("openai", () => ({
+  default: class {
+    embeddings = {
+      create: async () => {
+        if (openAIState.failEmbeddings) {
+          throw new Error("mock OpenAI diagnostics failed");
+        }
+
+        return {
+          data: [{ embedding: [0.1, 0.2, 0.3] }]
+        };
+      }
+    };
+
+    responses = {
+      create: async function* () {
+        yield { type: "response.output_text.delta", delta: "mock OpenAI response" };
+        yield {
+          type: "response.completed",
+          response: {
+            model: "gpt-5",
+            usage: {
+              input_tokens: 10,
+              output_tokens: 5,
+              total_tokens: 15
+            }
+          }
+        };
+      }
+    };
   }
 }));
 
@@ -60,6 +101,7 @@ type Routes = {
   uploadPost: (request: Request) => Promise<Response>;
   documentDelete: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   documentReindex: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
+  documentsReindex: (request: Request) => Promise<Response>;
   chatPost: (request: Request) => Promise<Response>;
   usageGet: () => Promise<Response>;
   adminDiagnosticsGet: () => Promise<Response>;
@@ -145,6 +187,7 @@ describe("knowledge assistant API flow", () => {
       uploadRoute,
       documentActionsRoute,
       documentReindexRoute,
+      documentsReindexRoute,
       chatRoute,
       usageRoute,
       adminDiagnosticsRoute,
@@ -157,6 +200,7 @@ describe("knowledge assistant API flow", () => {
       import("@/app/api/upload/route"),
       import("@/app/api/documents/[documentId]/route"),
       import("@/app/api/documents/[documentId]/reindex/route"),
+      import("@/app/api/documents/reindex/route"),
       import("@/app/api/chat/route"),
       import("@/app/api/usage/route"),
       import("@/app/api/admin/diagnostics/route"),
@@ -171,6 +215,7 @@ describe("knowledge assistant API flow", () => {
       uploadPost: uploadRoute.POST,
       documentDelete: documentActionsRoute.DELETE,
       documentReindex: documentReindexRoute.POST,
+      documentsReindex: documentsReindexRoute.POST,
       chatPost: chatRoute.POST,
       usageGet: usageRoute.GET,
       adminDiagnosticsGet: adminDiagnosticsRoute.GET
@@ -289,6 +334,40 @@ describe("knowledge assistant API flow", () => {
     expect(reindexedDocument.failedReason).toBeNull();
     expect(chromaState.storedIds.length).toBeGreaterThan(0);
 
+    chromaState.failWrites = true;
+    const pendingReindexUpload = await uploadFile(
+      routes,
+      new File(["Bulk re-index should move this document back to ready."], "bulk-reindex.txt", {
+        type: "text/plain"
+      })
+    );
+
+    expect(pendingReindexUpload.response.status).toBe(201);
+    expect(pendingReindexUpload.payload.data?.document.status).toBe("ready_without_chroma");
+
+    chromaState.failWrites = false;
+    const bulkReindexResponse = await routes.documentsReindex(
+      new Request("http://test.local/api/documents/reindex", {
+        method: "POST"
+      })
+    );
+    const bulkReindexPayload = await parseJson<{
+      result: {
+        total: number;
+        succeeded: number;
+        failed: number;
+        documents: Array<{ id: string; status: string; failedReason?: string | null }>;
+      };
+    }>(bulkReindexResponse);
+
+    expect(bulkReindexResponse.status).toBe(200);
+    expect(bulkReindexPayload.data?.result.total).toBeGreaterThanOrEqual(1);
+    expect(bulkReindexPayload.data?.result.succeeded).toBeGreaterThanOrEqual(1);
+    expect(bulkReindexPayload.data?.result.failed).toBe(0);
+    expect(
+      bulkReindexPayload.data?.result.documents.find((document) => document.id === pendingReindexUpload.payload.data?.document.id)
+    ).toMatchObject({ status: "ready", failedReason: null });
+
     const chatResponse = await routes.chatPost(
       new Request("http://test.local/api/chat", {
         method: "POST",
@@ -369,7 +448,14 @@ describe("knowledge assistant API flow", () => {
     const payload = await parseJson<{
       chroma: { status: string; url: string; collection: string };
       database: { status: string; migrationCount: number };
-      openai: { status: string; keyConfigured: boolean; keyCount: number; model: string; embeddingModel: string };
+      openai: {
+        status: string;
+        keyConfigured: boolean;
+        keyCount: number;
+        model: string;
+        embeddingModel: string;
+        liveStatus: string;
+      };
       uploadDirectory: { status: string; path: string };
     }>(response);
 
@@ -382,8 +468,22 @@ describe("knowledge assistant API flow", () => {
     expect(payload.data?.openai.keyCount).toBe(1);
     expect(payload.data?.openai.model).toBe("gpt-5");
     expect(payload.data?.openai.embeddingModel).toBe("text-embedding-3-small");
+    expect(payload.data?.openai.liveStatus).toBe("ok");
     expect(payload.data?.uploadDirectory.status).toBe("ok");
     expect(payload.data?.uploadDirectory.path).toBe(uploadDir);
+
+    openAIState.failEmbeddings = true;
+    const failedOpenAIResponse = await routes.adminDiagnosticsGet();
+    const failedOpenAIPayload = await parseJson<{
+      openai: { status: string; liveStatus: string; message?: string };
+    }>(failedOpenAIResponse);
+
+    expect(failedOpenAIResponse.status).toBe(200);
+    expect(failedOpenAIPayload.data?.openai.status).toBe("error");
+    expect(failedOpenAIPayload.data?.openai.liveStatus).toBe("error");
+    expect(failedOpenAIPayload.data?.openai.message).toContain("mock OpenAI diagnostics failed");
+
+    openAIState.failEmbeddings = false;
     process.env.OPENAI_API_KEY = "";
   });
 
