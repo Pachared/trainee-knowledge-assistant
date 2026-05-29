@@ -45,7 +45,7 @@ export function TopBar({ view, sidebarOpen = false, onOpenSidebar, onNewChat }: 
         }}
       >
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h6" component="h1" sx={{ fontWeight: 900 }}>
+          <Typography variant="h6" component="h1">
             {titleByView[view]}
           </Typography>
           <Typography variant="caption" color="text.secondary">
@@ -89,7 +89,7 @@ export function TopBar({ view, sidebarOpen = false, onOpenSidebar, onNewChat }: 
         >
           <MenuOutlinedIcon sx={{ fontSize: 28 }} />
         </IconButton>
-        <Typography variant="h6" component="div" sx={{ fontWeight: 900 }} noWrap>
+        <Typography variant="h6" component="div" noWrap>
           {titleByView[view]}
         </Typography>
         <Stack direction="row" spacing={0.25}>
