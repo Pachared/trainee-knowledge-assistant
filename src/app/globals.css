@@ -3,7 +3,9 @@
 :root {
   --font-latin: Roboto;
   --font-thai: "Noto Sans Thai";
-  --font-sans: var(--font-latin), var(--font-thai), Arial, sans-serif;
+  --font-latin-stack: var(--font-latin), Arial, sans-serif;
+  --font-thai-stack: var(--font-thai), var(--font-latin), Arial, sans-serif;
+  --font-sans: var(--font-thai-stack);
 }
 
 * {
@@ -20,11 +22,11 @@ body {
 }
 
 :lang(th) {
-  font-family: var(--font-latin), var(--font-thai), Arial, sans-serif;
+  font-family: var(--font-thai-stack);
 }
 
 :lang(en) {
-  font-family: var(--font-latin), Arial, sans-serif;
+  font-family: var(--font-latin-stack) !important;
 }
 
 .markdown-body p {

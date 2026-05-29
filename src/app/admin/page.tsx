@@ -69,7 +69,7 @@ function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
     >
       <Stack spacing={2}>
         <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-          <Typography variant="h6" component="h2" sx={{ fontWeight: 900 }}>
+          <Typography variant="h6" component="h2" sx={{ fontWeight: 900 }} lang="en">
             {title}
           </Typography>
           <Chip icon={config.icon} label={config.label} color={config.color} size="small" variant="outlined" />
@@ -80,11 +80,12 @@ function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
         <Stack spacing={1.25}>
           {rows.map((row) => (
             <Stack key={row.label} direction="row" spacing={2} sx={{ justifyContent: "space-between" }}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" lang="en">
                 {row.label}
               </Typography>
               <Typography
                 variant="body2"
+                lang="en"
                 sx={{
                   fontWeight: 700,
                   textAlign: "right",
@@ -127,7 +128,7 @@ export default async function AdminPage() {
         <Stack spacing={3}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ justifyContent: "space-between" }}>
             <Box>
-              <Typography variant="h1" component="h1" sx={{ fontWeight: 900 }}>
+              <Typography variant="h1" component="h1" sx={{ fontWeight: 900 }} lang="en">
                 Admin diagnostics
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>

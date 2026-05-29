@@ -48,7 +48,7 @@ export function TopBar({ view, sidebarOpen = false, onOpenSidebar, onNewChat }: 
           <Typography variant="h6" component="h1">
             {titleByView[view]}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" lang="en">
             Next.js API Routes + Prisma + SQLite + Chroma + OpenAI
           </Typography>
         </Box>
@@ -56,10 +56,10 @@ export function TopBar({ view, sidebarOpen = false, onOpenSidebar, onNewChat }: 
           <Button component={Link} href="/upload" variant="outlined" startIcon={<DriveFolderUploadOutlinedIcon />}>
             อัปโหลด
           </Button>
-          <Button component={Link} href="/usage" variant="outlined" startIcon={<AnalyticsOutlinedIcon />}>
+          <Button component={Link} href="/usage" variant="outlined" startIcon={<AnalyticsOutlinedIcon />} lang="en">
             Token usage
           </Button>
-          <Button component={Link} href="/admin" variant="outlined" startIcon={<AdminPanelSettingsOutlinedIcon />}>
+          <Button component={Link} href="/admin" variant="outlined" startIcon={<AdminPanelSettingsOutlinedIcon />} lang="en">
             Diagnostics
           </Button>
           <Button type="button" variant="outlined" onClick={onNewChat} startIcon={<EditOutlinedIcon />}>

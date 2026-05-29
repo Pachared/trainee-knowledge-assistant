@@ -1,7 +1,6 @@
 import { createTheme } from "@mui/material/styles";
 
-const fontFamily = 'Roboto, "Noto Sans Thai", Arial, sans-serif';
-const appleTextFontFamily = 'Roboto, "Noto Sans Thai", Arial, sans-serif';
+const fontFamily = "var(--font-sans)";
 
 function responsiveType({
   xs,
@@ -99,7 +98,7 @@ export const appTheme = createTheme({
         body: {
           minHeight: "100%",
           overflow: "hidden",
-          fontFamily: appleTextFontFamily,
+          fontFamily,
           fontSize: "17px",
           lineHeight: 1.47,
           "@media (min-width:1024px)": {

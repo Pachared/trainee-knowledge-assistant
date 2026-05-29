@@ -19,7 +19,7 @@ export function UsageView({ usage }: UsageViewProps) {
     <Box component="section" sx={{ display: "flex", minHeight: 0, flex: 1, flexDirection: "column" }}>
       <Box sx={{ minHeight: 0, flex: 1, overflowY: "auto", px: { xs: 1.75, md: 3 }, py: { xs: 2.75, md: 4 } }}>
         <Box sx={{ width: "min(100%, 920px)", mx: "auto" }}>
-          <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
+          <Typography variant="h2" component="h2" sx={{ mb: 1 }} lang="en">
             Token Usage
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
@@ -27,7 +27,12 @@ export function UsageView({ usage }: UsageViewProps) {
           </Typography>
 
           <Paper elevation={0} sx={{ border: 1, borderColor: "divider", p: 3, mb: 2.25 }}>
-            <Chip icon={<TollOutlinedIcon />} label={`Total ${total.toLocaleString()} tokens`} sx={{ width: "100%", justifyContent: "center" }} />
+            <Chip
+              icon={<TollOutlinedIcon />}
+              label={`Total ${total.toLocaleString()} tokens`}
+              lang="en"
+              sx={{ width: "100%", justifyContent: "center" }}
+            />
           </Paper>
 
           <Stack spacing={1.25}>

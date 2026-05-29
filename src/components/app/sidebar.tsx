@@ -118,7 +118,7 @@ export function Sidebar({
       }}
     >
       <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", minHeight: 44, px: 1, pb: 1.75 }}>
-        <Typography variant="h6" component="div">
+        <Typography variant="h6" component="div" lang="en">
           Knowledge AI
         </Typography>
         <IconButton type="button" onClick={onClose} aria-label="ปิด sidebar" size="small">
@@ -225,7 +225,7 @@ export function Sidebar({
           <Typography variant="body2" noWrap sx={{ fontWeight: 900 }}>
             {userName}
           </Typography>
-          <Typography variant="caption" color="text.secondary" noWrap>
+          <Typography variant="caption" color="text.secondary" noWrap lang="en">
             Mock admin
           </Typography>
         </Box>
