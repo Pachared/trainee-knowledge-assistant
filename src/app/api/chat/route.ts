@@ -11,14 +11,16 @@ import {
   summarizeUsage,
   streamAssistantText
 } from "@/lib/ai/assistant-service";
+import { formatAssistantError } from "@/lib/ai/openai-errors";
 import { getOpenAIModel } from "@/lib/ai/openai-client";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { jsonError, parseRouteError } from "@/lib/http/response";
 import { isWholeDocumentSummaryRequest, retrieveContext, retrieveWholeDocumentContext } from "@/lib/rag/rag-service";
+import { fitSummaryContextsToBudget } from "@/lib/rag/summary-context";
 import { recordUsage } from "@/lib/usage/usage-service";
 import { chatPromptSchema } from "@/lib/validation/schemas";
 import { clientIpFromHeaders, sanitizePlainText } from "@/lib/security/input";
-import { chatRateLimiter } from "@/lib/security/rate-limit";
+import { chatRateLimitOptions, checkStoredRateLimit } from "@/lib/security/rate-limit";
 import { assertDailyChatQuota } from "@/lib/security/quota";
 
 export const runtime = "nodejs";
@@ -30,7 +32,7 @@ function sse(event: string, data: unknown) {
 export async function POST(request: Request) {
   try {
     const user = await requireCurrentUser();
-    const limit = chatRateLimiter.check(`chat:${user.id}:${clientIpFromHeaders(request.headers)}`);
+    const limit = await checkStoredRateLimit(`chat:${user.id}:${clientIpFromHeaders(request.headers)}`, chatRateLimitOptions());
 
     if (!limit.allowed) {
       return jsonError("ส่งข้อความถี่เกินไป กรุณาลองใหม่ภายหลัง", 429, { resetAt: limit.resetAt });
@@ -50,10 +52,13 @@ export async function POST(request: Request) {
 
     const contexts =
       body.documentId && isWholeDocumentSummaryRequest(message)
-        ? await retrieveWholeDocumentContext({
-            userId: user.id,
-            documentId: body.documentId
-          })
+        ? fitSummaryContextsToBudget(
+            await retrieveWholeDocumentContext({
+              userId: user.id,
+              documentId: body.documentId,
+              maxTokens: Number.MAX_SAFE_INTEGER
+            })
+          )
         : await retrieveContext({
             userId: user.id,
             query: message,
@@ -128,7 +133,7 @@ export async function POST(request: Request) {
           controller.enqueue(
             encoder.encode(
               sse("error", {
-                message: error instanceof Error ? error.message : "เกิดข้อผิดพลาดระหว่างสร้างคำตอบ"
+                message: formatAssistantError(error)
               })
             )
           );

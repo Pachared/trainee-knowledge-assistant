@@ -91,3 +91,10 @@ model TokenUsage {
 
   @@index([chatSessionId, createdAt])
 }
+
+model RateLimitBucket {
+  bucketKey String   @id
+  count     Int
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+}

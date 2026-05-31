@@ -4,13 +4,13 @@ import { verifyMockPassword } from "@/lib/auth/mock-user";
 import { createSessionToken, SESSION_COOKIE_NAME, sessionCookieOptions } from "@/lib/auth/session";
 import { jsonError, jsonOk, parseRouteError } from "@/lib/http/response";
 import { clientIpFromHeaders } from "@/lib/security/input";
-import { globalRateLimiter } from "@/lib/security/rate-limit";
+import { checkStoredRateLimit, globalRateLimitOptions } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const limit = globalRateLimiter.check(`login:${clientIpFromHeaders(request.headers)}`);
+    const limit = await checkStoredRateLimit(`login:${clientIpFromHeaders(request.headers)}`, globalRateLimitOptions());
     if (!limit.allowed) {
       return jsonError("ลองใหม่อีกครั้งภายหลัง", 429, { resetAt: limit.resetAt });
     }

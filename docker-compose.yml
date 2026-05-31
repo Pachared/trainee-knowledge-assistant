@@ -24,6 +24,24 @@ services:
       timeout: 5s
       retries: 5
 
+  worker:
+    image: trainee-knowledge-assistant-web:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npm", "run", "worker:documents"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "file:/app/data/db/dev.db"
+      CHROMA_URL: "http://chroma:8000"
+    volumes:
+      - sqlite-data:/app/data/db
+      - uploads:/app/data/uploads
+    depends_on:
+      web:
+        condition: service_healthy
+
   chroma:
     image: chromadb/chroma@sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6
     ports:

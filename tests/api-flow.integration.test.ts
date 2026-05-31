@@ -105,6 +105,8 @@ type Routes = {
   chatPost: (request: Request) => Promise<Response>;
   usageGet: () => Promise<Response>;
   adminDiagnosticsGet: () => Promise<Response>;
+  adminReconcileChromaPost: () => Promise<Response>;
+  processDocument: (documentId: string) => Promise<unknown>;
 };
 
 const testDbName = `integration-${Date.now()}.db`;
@@ -137,6 +139,26 @@ async function uploadFile(routes: Routes, file: File) {
       };
     }>(response)
   };
+}
+
+async function processUpload(routes: Routes, upload: Awaited<ReturnType<typeof uploadFile>>) {
+  const documentId = upload.payload.data?.document.id;
+  expect(documentId).toEqual(expect.any(String));
+  await routes.processDocument(documentId ?? "");
+
+  return prismaDocument(documentId ?? "");
+}
+
+async function prismaDocument(documentId: string) {
+  const { prisma } = await import("@/lib/db/prisma");
+  return prisma.document.findUniqueOrThrow({
+    where: { id: documentId },
+    include: {
+      chunks: {
+        select: { id: true }
+      }
+    }
+  });
 }
 
 async function applyMigration() {
@@ -191,6 +213,8 @@ describe("knowledge assistant API flow", () => {
       chatRoute,
       usageRoute,
       adminDiagnosticsRoute,
+      adminReconcileChromaRoute,
+      documentService,
       db
     ] =
       await Promise.all([
@@ -204,6 +228,8 @@ describe("knowledge assistant API flow", () => {
       import("@/app/api/chat/route"),
       import("@/app/api/usage/route"),
       import("@/app/api/admin/diagnostics/route"),
+      import("@/app/api/admin/reconcile-chroma/route"),
+      import("@/lib/documents/document-service"),
       import("@/lib/db/prisma")
     ]);
 
@@ -218,7 +244,9 @@ describe("knowledge assistant API flow", () => {
       documentsReindex: documentsReindexRoute.POST,
       chatPost: chatRoute.POST,
       usageGet: usageRoute.GET,
-      adminDiagnosticsGet: adminDiagnosticsRoute.GET
+      adminDiagnosticsGet: adminDiagnosticsRoute.GET,
+      adminReconcileChromaPost: adminReconcileChromaRoute.POST,
+      processDocument: documentService.processDocument
     };
     prisma = db.prisma;
   }, 30_000);
@@ -257,9 +285,11 @@ describe("knowledge assistant API flow", () => {
     );
 
     expect(txtUpload.response.status).toBe(201);
-    expect(txtUpload.payload.data?.document.status).toMatch(/^ready/);
-    expect(txtUpload.payload.data?.document.chunks.length).toBeGreaterThan(0);
-    expect(txtUpload.payload.data?.document.failedReason).toEqual(expect.any(String));
+    expect(txtUpload.payload.data?.document.status).toBe("queued");
+    const processedTxtDocument = await processUpload(routes, txtUpload);
+    expect(processedTxtDocument.status).toMatch(/^ready/);
+    expect(processedTxtDocument.chunks.length).toBeGreaterThan(0);
+    expect(processedTxtDocument.failedReason).toEqual(expect.any(String));
 
     const pdfFixture = await readFile(join(process.cwd(), "node_modules/pdf-parse/test/data/01-valid.pdf"));
     const pdfUpload = await uploadFile(
@@ -270,9 +300,11 @@ describe("knowledge assistant API flow", () => {
     );
 
     expect(pdfUpload.response.status).toBe(201);
-    expect(pdfUpload.payload.data?.document.status).toMatch(/^ready/);
-    expect(pdfUpload.payload.data?.document.chunks.length).toBeGreaterThan(0);
-    expect(pdfUpload.payload.data?.document.failedReason).toEqual(expect.any(String));
+    expect(pdfUpload.payload.data?.document.status).toBe("queued");
+    const processedPdfDocument = await processUpload(routes, pdfUpload);
+    expect(processedPdfDocument.status).toMatch(/^ready/);
+    expect(processedPdfDocument.chunks.length).toBeGreaterThan(0);
+    expect(processedPdfDocument.failedReason).toEqual(expect.any(String));
 
     const failedPdf = await uploadFile(
       routes,
@@ -281,8 +313,9 @@ describe("knowledge assistant API flow", () => {
       })
     );
 
-    expect(failedPdf.response.status).toBe(400);
-    expect(failedPdf.payload.error?.message).toEqual(expect.any(String));
+    expect(failedPdf.response.status).toBe(201);
+    expect(failedPdf.payload.data?.document.status).toBe("queued");
+    await processUpload(routes, failedPdf);
 
     const storedFailedPdf = await prisma.document.findFirstOrThrow({
       where: { filename: { contains: "broken" } },
@@ -343,7 +376,9 @@ describe("knowledge assistant API flow", () => {
     );
 
     expect(pendingReindexUpload.response.status).toBe(201);
-    expect(pendingReindexUpload.payload.data?.document.status).toBe("ready_without_chroma");
+    expect(pendingReindexUpload.payload.data?.document.status).toBe("queued");
+    const processedPendingReindexDocument = await processUpload(routes, pendingReindexUpload);
+    expect(processedPendingReindexDocument.status).toBe("ready_without_chroma");
 
     chromaState.failWrites = false;
     const bulkReindexResponse = await routes.documentsReindex(
@@ -368,6 +403,22 @@ describe("knowledge assistant API flow", () => {
       bulkReindexPayload.data?.result.documents.find((document) => document.id === pendingReindexUpload.payload.data?.document.id)
     ).toMatchObject({ status: "ready", failedReason: null });
 
+    chromaState.storedIds = [];
+    const reconcileResponse = await routes.adminReconcileChromaPost();
+    const reconcilePayload = await parseJson<{
+      result: {
+        total: number;
+        succeeded: number;
+        failed: number;
+      };
+    }>(reconcileResponse);
+
+    expect(reconcileResponse.status).toBe(200);
+    expect(reconcilePayload.data?.result.total).toBeGreaterThanOrEqual(2);
+    expect(reconcilePayload.data?.result.succeeded).toBe(reconcilePayload.data?.result.total);
+    expect(reconcilePayload.data?.result.failed).toBe(0);
+    expect(chromaState.storedIds.length).toBeGreaterThan(0);
+
     const longDocumentText = Array.from({ length: 9 }, (_, index) =>
       [
         `หัวข้อที่ ${index + 1}`,
@@ -383,7 +434,9 @@ describe("knowledge assistant API flow", () => {
     );
 
     expect(longDocumentUpload.response.status).toBe(201);
-    expect(longDocumentUpload.payload.data?.document.chunks.length).toBeGreaterThan(5);
+    expect(longDocumentUpload.payload.data?.document.status).toBe("queued");
+    const processedLongDocument = await processUpload(routes, longDocumentUpload);
+    expect(processedLongDocument.chunks.length).toBeGreaterThan(5);
 
     const summaryResponse = await routes.chatPost(
       new Request("http://test.local/api/chat", {

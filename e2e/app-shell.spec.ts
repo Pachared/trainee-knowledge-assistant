@@ -51,7 +51,25 @@ async function uploadTextDocument(page: Page, filename: string, content: string)
         throw new Error(payload.error?.message || "upload document failed");
       }
 
-      return payload.data.document;
+      const document = payload.data.document;
+      const deadline = Date.now() + 10_000;
+
+      while (Date.now() < deadline) {
+        const documentsResponse = await fetch("/api/documents");
+        const documentsPayload = (await documentsResponse.json()) as {
+          ok: boolean;
+          data?: { documents?: Array<{ id: string; status: string; _count?: { chunks?: number } }> };
+        };
+        const current = documentsPayload.data?.documents?.find((item) => item.id === document.id);
+
+        if (current && current.status !== "queued" && current.status !== "processing" && (current._count?.chunks ?? 0) > 0) {
+          return document;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+
+      throw new Error("document worker did not process upload in time");
     },
     { uploadFilename: filename, uploadContent: content }
   );

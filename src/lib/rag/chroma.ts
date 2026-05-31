@@ -22,16 +22,26 @@ type ChromaCollection = {
 
 let collectionPromise: Promise<ChromaCollection> | null = null;
 
+function chromaClientOptions(url: string) {
+  const parsed = new URL(url);
+
+  return {
+    host: parsed.hostname,
+    port: Number(parsed.port || (parsed.protocol === "https:" ? 443 : 80)),
+    ssl: parsed.protocol === "https:"
+  };
+}
+
 export async function getChromaCollection(): Promise<ChromaCollection> {
   if (!collectionPromise) {
     collectionPromise = (async () => {
       const { ChromaClient } = (await import("chromadb")) as unknown as {
-        ChromaClient: new (options: { path: string }) => {
+        ChromaClient: new (options: { host: string; port: number; ssl: boolean }) => {
           getOrCreateCollection(input: { name: string; embeddingFunction: null }): Promise<ChromaCollection>;
         };
       };
       const config = getChromaConfig();
-      const client = new ChromaClient({ path: config.url });
+      const client = new ChromaClient(chromaClientOptions(config.url));
 
       return client.getOrCreateCollection({ name: config.collection, embeddingFunction: null });
     })();

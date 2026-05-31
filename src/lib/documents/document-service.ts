@@ -1,4 +1,4 @@
-import { unlink } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
@@ -26,7 +26,7 @@ function validateUpload(file: File) {
   }
 }
 
-function formatFailureReason(error: unknown) {
+export function formatFailureReason(error: unknown) {
   const message = error instanceof Error ? error.message : "เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ";
   return message.slice(0, 1000);
 }
@@ -44,18 +44,51 @@ export async function uploadDocument(userId: string, file: File) {
       mimeType: file.type,
       size: file.size,
       path: saved.path,
+      status: "queued",
+      failedReason: null
+    }
+  });
+
+  return prisma.document.findUniqueOrThrow({
+    where: { id: document.id },
+    include: {
+      chunks: {
+        select: { id: true }
+      }
+    }
+  });
+}
+
+export async function processDocument(documentId: string) {
+  const document = await prisma.document.findUnique({
+    where: { id: documentId }
+  });
+
+  if (!document) {
+    return null;
+  }
+
+  await prisma.document.update({
+    where: { id: document.id },
+    data: {
       status: "processing",
       failedReason: null
     }
   });
 
   try {
-    const text = await extractTextFromFile(buffer, file.type);
+    const buffer = await readFile(document.path);
+    const text = await extractTextFromFile(buffer, document.mimeType);
     const chunks = chunkText(text);
 
     if (!chunks.length) {
       throw new Error("ไม่พบข้อความในไฟล์");
     }
+
+    await deleteDocumentFromChroma(document.id).catch(() => undefined);
+    await prisma.documentChunk.deleteMany({
+      where: { documentId: document.id }
+    });
 
     const storedChunks = await prisma.$transaction(
       chunks.map((chunk) =>
@@ -73,7 +106,7 @@ export async function uploadDocument(userId: string, file: File) {
 
     try {
       await indexChunksInChroma({
-        userId,
+        userId: document.userId,
         documentId: document.id,
         chunks: storedChunks.map((chunk) => ({
           id: chunk.id,
@@ -105,15 +138,42 @@ export async function uploadDocument(userId: string, file: File) {
       }
     });
   } catch (error) {
-    await prisma.document.update({
+    return prisma.document.update({
       where: { id: document.id },
       data: {
         status: "failed",
         failedReason: formatFailureReason(error)
       }
     });
-    throw error;
   }
+}
+
+export async function processNextQueuedDocument() {
+  const document = await prisma.document.findFirst({
+    where: { status: "queued" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true }
+  });
+
+  if (!document) {
+    return null;
+  }
+
+  return processDocument(document.id);
+}
+
+export async function processQueuedDocuments(limit = 5) {
+  const processed = [];
+
+  for (let index = 0; index < limit; index += 1) {
+    const document = await processNextQueuedDocument();
+    if (!document) {
+      break;
+    }
+    processed.push(document);
+  }
+
+  return processed;
 }
 
 export async function listDocuments(userId: string) {
@@ -255,6 +315,53 @@ export async function reindexPendingDocuments(userId: string) {
 
   return {
     total: pendingDocuments.length,
+    succeeded,
+    failed,
+    documents: results
+  };
+}
+
+export async function reconcileChromaDocuments(userId: string) {
+  const documents = await prisma.document.findMany({
+    where: {
+      userId,
+      status: { in: ["ready", "ready_without_chroma"] },
+      chunks: {
+        some: {}
+      }
+    },
+    select: { id: true },
+    orderBy: { createdAt: "asc" }
+  });
+  const results: Array<{ id: string; status: string; failedReason?: string | null }> = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const document of documents) {
+    try {
+      const updated = await reindexDocument(userId, document.id);
+      results.push({
+        id: updated.id,
+        status: updated.status,
+        failedReason: updated.failedReason
+      });
+      succeeded += 1;
+    } catch (error) {
+      const errorDocument = error instanceof Error && "document" in error
+        ? (error as Error & { document?: { id: string; status: string; failedReason?: string | null } }).document
+        : undefined;
+
+      results.push({
+        id: errorDocument?.id ?? document.id,
+        status: errorDocument?.status ?? "ready_without_chroma",
+        failedReason: errorDocument?.failedReason ?? (error instanceof Error ? error.message : "reconcile Chroma ไม่สำเร็จ")
+      });
+      failed += 1;
+    }
+  }
+
+  return {
+    total: documents.length,
     succeeded,
     failed,
     documents: results
