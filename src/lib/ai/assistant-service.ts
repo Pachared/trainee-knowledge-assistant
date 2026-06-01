@@ -6,6 +6,7 @@ type AssistantInput = {
   message: string;
   history: Array<{ role: string; content: string }>;
   contexts: RetrievedContext[];
+  summaryMode?: "comprehensive";
 };
 
 export type AssistantTokenUsage = {
@@ -44,10 +45,21 @@ export function buildAssistantPrompt(input: AssistantInput) {
     .map((message) => `${message.role}: ${message.content}`)
     .join("\n");
 
+  const summaryInstructions =
+    input.summaryMode === "comprehensive"
+      ? [
+          "โหมดสรุปเอกสาร: สรุปแบบละเอียดและครอบคลุมทุกส่วนของข้อมูลที่ได้รับจากเอกสาร",
+          "ให้เรียงคำตอบเป็นหัวข้อชัดเจน: ภาพรวม, ประเด็นสำคัญทั้งหมด, รายละเอียดแยกตามลำดับเอกสาร, ข้อสรุป, ข้อจำกัดหรือสิ่งที่ยังไม่ชัดเจน",
+          "ห้ามข้ามรายละเอียดสำคัญ ห้ามสรุปเฉพาะส่วนต้นหรือเฉพาะส่วนที่คล้ายคำถาม ถ้าข้อมูลซ้ำให้รวมความโดยไม่ทิ้งสาระ",
+          "ถ้าเอกสารมีหลายส่วน ให้ระบุให้เห็นว่าครอบคลุมทุกส่วนที่ได้รับ และใส่อ้างอิง [เลข] เมื่อกล่าวถึงเนื้อหาจาก context"
+        ]
+      : [];
+
   return [
     "คุณคือ Trainee Knowledge Assistant ตอบเป็นภาษาไทยให้กระชับ ชัดเจน และอ้างอิงเอกสารเมื่อมี context",
     "ถ้าไม่มีข้อมูลในเอกสาร ให้บอกอย่างตรงไปตรงมาและเสนอคำถามต่อยอด",
     "ถ้าผู้ใช้ขอสรุปเอกสารและมี context หลายส่วน ให้สรุปจากทุกส่วนที่ได้รับตามลำดับ ไม่เลือกเฉพาะส่วนแรกหรือส่วนที่คล้ายคำถามเท่านั้น",
+    ...summaryInstructions,
     "",
     "บริบทจากเอกสาร:",
     contextText,

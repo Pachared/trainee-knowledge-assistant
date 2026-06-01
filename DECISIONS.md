@@ -96,7 +96,7 @@ MUI มี bundle และ styling abstraction ที่ต้องเข้�
 
 ### Context
 
-โจทย์ต้องการให้รันด้วย Docker Compose และควรรันได้ด้วยคำสั่งเดียว ระบบมีอย่างน้อย 2 service คือ web app และ Chroma รวมถึงต้องมี SQLite volume และ uploads volume เพื่อเก็บข้อมูลข้าม restart
+โจทย์ต้องการให้รันด้วย Docker Compose และควรรันได้ด้วยคำสั่งเดียว ระบบมี service หลักคือ web app, document worker, Chroma และ Redis รวมถึงมี SQLite volume และ uploads volume เพื่อเก็บข้อมูลข้าม restart
 
 ### Alternatives Considered
 
@@ -104,31 +104,31 @@ MUI มี bundle และ styling abstraction ที่ต้องเข้�
 
 ### Why Docker Compose
 
-เลือก Docker Compose เพราะทำให้ environment repeatable มากขึ้น web container build จาก Dockerfile, Chroma ใช้ pinned image digest, SQLite และ uploads ใช้ named volumes, startup รัน migration/seed อัตโนมัติ และ healthcheck ตรวจทั้ง web กับ Chroma
+เลือก Docker Compose เพราะทำให้ environment repeatable มากขึ้น web container build จาก Dockerfile, Chroma และ Redis ใช้ pinned image digest, SQLite และ uploads ใช้ named volumes, startup รัน migration/seed อัตโนมัติ และ healthcheck ตรวจ web, Chroma และ Redis ก่อนเริ่ม worker
 
 ### Trade-offs
 
 Docker Compose local ยังขึ้นกับ Docker Desktop state และ image store ของเครื่องผู้ใช้ เคยเจอ metadata issue เช่น `No such container` ซึ่งไม่ใช่ bug ของ app โดยตรง Production จริงควรมี compose/prod หรือ orchestration แยก และใช้ Docker secrets แทน `.env`
 
-## Decision 7: ใช้ synchronous upload/indexing ก่อน แล้วค่อยระบุเป็น known limitation
+## Decision 7: แยก document indexing เป็น background worker พร้อม lock/retry
 
 ### Context
 
-เมื่อ upload เอกสาร ระบบต้อง save file, extract text, chunk, embed และ index เข้า Chroma ขั้นตอนนี้ทำใน request เดียวเพื่อให้ flow เข้าใจง่ายและ user ได้ผลลัพธ์ทันทีว่าเอกสาร ready หรือ ready_without_chroma
+เมื่อ upload เอกสาร ระบบต้อง save file, extract text, chunk, embed และ index เข้า Chroma ขั้นตอนเหล่านี้อาจช้า โดยเฉพาะ PDF ใหญ่, OpenAI embedding ช้า หรือ Chroma มีปัญหา ถ้าทำทั้งหมดใน request เดียว ผู้ใช้จะรอนานและเสี่ยง timeout จึงปรับให้ upload สร้างเอกสารสถานะ `queued` แล้วให้ worker ทำงานต่อ
 
 ### Alternatives Considered
 
-ทางเลือกที่ robust กว่าคือ queue + background worker เช่น BullMQ/Redis, database jobs หรือ workflow engine วิธีนั้นเหมาะกับไฟล์ใหญ่และ production แต่ต้องเพิ่ม service, job state, retry policy และ progress UI
+ทางเลือกแรกคือทำ synchronous ต่อไปเพราะเรียบง่าย แต่มีปัญหาเรื่อง timeout และ UX ทางเลือกที่สองคือใช้ queue เต็มรูปแบบ เช่น BullMQ/Redis Streams พร้อม dead-letter queue ซึ่ง production-ready กว่าแต่เพิ่ม dependency และความซับซ้อน ทางเลือกที่สามคือใช้ SQLite document table เป็น job state ก่อน โดยเพิ่ม lock/retry metadata
 
-### Why synchronous first
+### Why DB-backed worker first
 
-เลือก synchronous ก่อนเพราะ assignment ต้องการระบบที่ setup ง่ายและเห็นครบ flow ใน project เดียว การทำใน request เดียวทำให้ integration test เขียนง่าย และทำให้สถานะเอกสารเปลี่ยนชัดเจนทันทีหลัง upload
+เลือก DB-backed worker เพราะเข้ากับ stack เดิมที่ใช้ Prisma + SQLite และยังรันด้วย Docker Compose ได้ง่าย worker ใช้ fields เช่น `indexingAttempts`, `lockedBy`, `lockedAt`, `nextAttemptAt`, `lastIndexedAt` เพื่อ claim งาน, recover stale processing jobs, retry ด้วย backoff และเก็บ `failedReason` เมื่อเกิดปัญหา ถ้า PDF เสียจะ fail ทันที แต่ถ้า Chroma ล้มจะเป็น `ready_without_chroma` และยังใช้ SQLite fallback ได้
 
 ### Trade-offs
 
-ข้อเสียคือไฟล์ใหญ่หรือ OpenAI/Chroma ช้าอาจทำให้ request นานหรือ timeout ในอนาคตควรแยก worker, เพิ่ม queue, retry backoff, progress status และหน้า admin สำหรับดู job failed/retry
+ข้อดีคือ UX ดีขึ้นและลด timeout โดยไม่ต้องเพิ่ม queue service หนัก ๆ แต่ trade-off คือ polling worker ยังไม่แข็งเท่า queue จริง ถ้างานเยอะมากหรือมีหลาย instance ควรย้ายไป BullMQ/Redis Streams และเพิ่ม dead-letter queue, job dashboard และ retry policy ที่ละเอียดกว่า
 
-## Decision 8: แก้สรุปทั้งเอกสารด้วย ordered SQLite chunks แทน Chroma top-k
+## Decision 8: แก้สรุปทั้งเอกสารด้วย comprehensive summary cache + ordered SQLite chunks
 
 ### Context
 
@@ -136,12 +136,50 @@ Docker Compose local ยังขึ้นกับ Docker Desktop state แล�
 
 ### Alternatives Considered
 
-ทางเลือกแรกคือเพิ่ม top-k จาก 5 เป็นจำนวนมากขึ้น แต่ยังไม่รับประกันว่าครบทั้งเอกสารและอาจเรียงลำดับผิด อีกทางเลือกคือใช้ Chroma query แบบกว้างมาก แต่ vector search ไม่เหมาะกับคำสั่งสรุปทั้งไฟล์ วิธีที่ตรงกว่า คือดึง chunks ทั้งเอกสารจาก SQLite ตาม `chunkIndex`
+ทางเลือกแรกคือเพิ่ม top-k จาก 5 เป็นจำนวนมากขึ้น แต่ยังไม่รับประกันว่าครบทั้งเอกสารและอาจเรียงลำดับผิด อีกทางเลือกคือใช้ Chroma query แบบกว้างมาก แต่ vector search ไม่เหมาะกับคำสั่งสรุปทั้งไฟล์ วิธีที่ตรงกว่า คือสร้าง summary cache ตอน worker index เอกสาร และดึง chunks ทั้งเอกสารจาก SQLite ตาม `chunkIndex`
 
-### Why ordered SQLite chunks
+### Why summary cache + ordered chunks
 
-เลือก ordered SQLite chunks เพราะ document chunks ถูกบันทึกครบอยู่แล้วและมีลำดับแน่นอน เมื่อ intent เป็นการสรุปทั้งเอกสาร ระบบจึงไม่ควรถาม Chroma ว่า chunk ไหนคล้ายคำถาม แต่ควรส่งเนื้อหาตามลำดับเอกสารให้ model สรุป
+เลือก summary cache + ordered chunks เพราะ document chunks ถูกบันทึกครบอยู่แล้วและมีลำดับแน่นอน ส่วน summary cache ช่วยให้เอกสารใหญ่มีภาพรวมก่อนส่ง chunks เข้า prompt เมื่อ intent เป็นการสรุปทั้งเอกสาร ระบบจึงไม่ควรถาม Chroma ว่า chunk ไหนคล้ายคำถาม แต่ควรใช้ภาพรวมเอกสารและเนื้อหาตามลำดับเท่าที่ token budget อนุญาต
+
+หลังผู้ใช้ต้องการสรุปแบบละเอียดขึ้น จึงปรับ summary cache ให้ครอบคลุมทุก chunk ตามลำดับ ไม่ sampling เฉพาะบางช่วง และเพิ่ม comprehensive summary mode ใน prompt เพื่อกำชับให้ตอบเป็นหัวข้อภาพรวม, ประเด็นสำคัญทั้งหมด, รายละเอียดตามลำดับเอกสาร, ข้อสรุป และข้อจำกัดหรือข้อมูลที่ยังไม่ชัดเจน
 
 ### Trade-offs
 
-วิธีนี้ดีสำหรับเอกสารขนาดเล็กถึงกลาง แต่ถ้าเอกสารใหญ่มากยังชน context limit ได้ จึงมี config `FULL_DOCUMENT_CONTEXT_MAX_CHUNKS` และ `FULL_DOCUMENT_CONTEXT_MAX_TOKENS` ในอนาคตควรเพิ่ม map-reduce summarization เพื่อสรุปเอกสารใหญ่มากอย่างเป็นระบบ
+วิธีนี้ดีสำหรับเอกสารขนาดเล็กถึงกลางและลดโอกาสสรุปหลุดบริบท แต่ summary cache ปัจจุบันยังเป็น extractive summary ที่ compact เนื้อหาแต่ละ chunk ไม่ใช่ LLM-generated map-reduce summary ถ้าเอกสารใหญ่มากยังควรเพิ่ม hierarchical/map-reduce summarization แบบ background job และเก็บ summary หลายระดับ
+
+## Decision 9: ใช้ Redis rate limit พร้อม SQLite fallback
+
+### Context
+
+ระบบเดิมมี rate limit จาก memory และต่อมาใช้ SQLite bucket ซึ่งดีกว่า memory แต่ถ้ารันหลาย instance หรือ restart container บ่อย ๆ การนับ request ยังไม่เหมาะกับ production หลาย instance ผู้ใช้ต้องการ rate limit/storage quota ที่จริงจังขึ้น จึงเพิ่ม Redis เป็น shared counter
+
+### Alternatives Considered
+
+ทางเลือกแรกคือใช้ in-memory ต่อไป ซึ่งง่ายแต่ไม่แชร์ข้าม process ทางเลือกที่สองคือใช้ SQLite ต่อไป ซึ่ง persistent แต่ไม่เหมาะกับ write concurrency สูง ทางเลือกที่สามคือใช้ Redis/Upstash เป็น rate limit backend ซึ่งเหมาะกับ counter ที่ต้องหมดอายุตามเวลาและแชร์ข้าม service
+
+### Why Redis with fallback
+
+เลือก Redis เป็น backend หลักเมื่อมี `RATE_LIMIT_REDIS_URL` เพราะรองรับ atomic increment และ TTL ได้ตรงกับ rate limit window ส่วน SQLite fallback ยังถูกเก็บไว้เพื่อให้ local/dev หรือกรณี Redis ชั่วคราวมีปัญหา ระบบยังใช้งานต่อได้ Docker Compose จึงเพิ่ม Redis service และ pin image ด้วย digest
+
+### Trade-offs
+
+ข้อดีคือ production-ready กว่า SQLite สำหรับ rate limit และ scale หลาย instance ได้ง่ายขึ้น ข้อเสียคือเพิ่ม service ที่ต้องดูแลอีกตัว และถ้า production ต้องการ strict enforcement จริง ๆ ควรตั้ง Redis ให้ highly available และอาจไม่ควร fallback แบบเงียบในบาง deployment
+
+## Decision 10: เพิ่ม Admin diagnostics และ structured worker logs แทน observability เต็มรูปแบบ
+
+### Context
+
+หลังระบบมี OpenAI, Chroma, Redis, SQLite และ worker แล้ว การ debug ด้วยการดูหน้า chat อย่างเดียวไม่พอ ต้องรู้ว่า service ไหนล่ม, migration ใช้ครบไหม, upload directory เขียนได้ไหม, worker มี stale job หรือไม่ และ token usage รวมเป็นอย่างไร
+
+### Alternatives Considered
+
+ทางเลือกที่ production-ready คือ OpenTelemetry, Prometheus, Grafana, log drain และ alerting แต่อาจใหญ่เกิน assignment อีกทางเลือกคือทำ diagnostics API/page ในแอปเองและ structured logs จาก worker ซึ่งเพียงพอสำหรับ local/Docker Compose และตรวจจาก browser ได้
+
+### Why diagnostics first
+
+เลือก diagnostics page เพราะผู้ใช้สามารถเข้า `/admin` แล้วเห็นสถานะ OpenAI, Chroma, Redis, Database, upload directory และ operational metrics ได้ทันที Worker log ถูกเปลี่ยนเป็น JSON event เช่น `document_worker_started` และ `document_worker_processed` เพื่อให้อ่านและส่งต่อเข้า log system ได้ง่ายขึ้นในอนาคต
+
+### Trade-offs
+
+diagnostics page ช่วย debug ได้เร็ว แต่ยังไม่ใช่ monitoring เต็มรูปแบบ ไม่มี alert, dashboard ระยะยาว หรือ distributed tracing ถ้าระบบถูกใช้จริงใน production ควรเพิ่ม external metrics/alerting และ request id ต่อทุก API call

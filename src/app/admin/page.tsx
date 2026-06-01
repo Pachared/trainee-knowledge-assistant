@@ -174,6 +174,17 @@ export default async function AdminPage() {
             </Box>
             <Box>
               <DiagnosticCard
+                title="Redis rate limit"
+                status={diagnostics.redis.status}
+                rows={[
+                  { label: "Configured", value: diagnostics.redis.configured },
+                  { label: "URL", value: diagnostics.redis.url }
+                ]}
+                message={diagnostics.redis.message}
+              />
+            </Box>
+            <Box>
+              <DiagnosticCard
                 title="Database"
                 status={diagnostics.database.status}
                 rows={[
@@ -181,6 +192,23 @@ export default async function AdminPage() {
                   { label: "Applied migrations", value: diagnostics.database.appliedCount }
                 ]}
                 message={diagnostics.database.message}
+              />
+            </Box>
+            <Box>
+              <DiagnosticCard
+                title="Operational metrics"
+                status={diagnostics.metrics.status}
+                rows={[
+                  { label: "Queued documents", value: diagnostics.metrics.documentsByStatus.queued ?? 0 },
+                  { label: "Processing documents", value: diagnostics.metrics.documentsByStatus.processing ?? 0 },
+                  { label: "Ready documents", value: diagnostics.metrics.documentsByStatus.ready ?? 0 },
+                  { label: "Ready without Chroma", value: diagnostics.metrics.documentsByStatus.ready_without_chroma ?? 0 },
+                  { label: "Failed documents", value: diagnostics.metrics.documentsByStatus.failed ?? 0 },
+                  { label: "Stale processing", value: diagnostics.metrics.staleProcessing },
+                  { label: "Chat sessions", value: diagnostics.metrics.chatSessions },
+                  { label: "Usage records", value: diagnostics.metrics.usageRecords },
+                  { label: "Total tokens", value: diagnostics.metrics.totalTokens }
+                ]}
               />
             </Box>
             <Box>

@@ -47,21 +47,29 @@ model Message {
 }
 
 model Document {
-  id           String          @id @default(cuid())
-  userId       String
-  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title        String
-  filename     String
-  mimeType     String
-  size         Int
-  path         String
-  status       String          @default("processing")
-  failedReason String?
-  chunks       DocumentChunk[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  filename         String
+  mimeType         String
+  size             Int
+  path             String
+  status           String           @default("processing")
+  failedReason     String?
+  indexingAttempts Int              @default(0)
+  lockedBy         String?
+  lockedAt         DateTime?
+  nextAttemptAt    DateTime?
+  lastIndexedAt    DateTime?
+  chunks           DocumentChunk[]
+  summary          DocumentSummary?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@index([userId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@index([lockedAt])
 }
 
 model DocumentChunk {
@@ -90,6 +98,17 @@ model TokenUsage {
   createdAt        DateTime    @default(now())
 
   @@index([chatSessionId, createdAt])
+}
+
+model DocumentSummary {
+  id          String   @id @default(cuid())
+  documentId  String   @unique
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content     String
+  tokenCount  Int
+  sourceHash  String
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model RateLimitBucket {

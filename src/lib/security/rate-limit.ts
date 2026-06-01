@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getNumberEnv } from "@/lib/env";
+import { checkRedisRateLimit, getRedisRateLimitUrl } from "@/lib/security/redis-rate-limit";
 
 type RateLimiterOptions = {
   max: number;
@@ -64,6 +65,14 @@ export const chatRateLimiter = createMemoryRateLimiter({
 });
 
 export async function checkStoredRateLimit(key: string, options: RateLimiterOptions): Promise<RateLimitResult> {
+  if (getRedisRateLimitUrl()) {
+    try {
+      return await checkRedisRateLimit(key, options);
+    } catch {
+      // Keep the application usable if Redis is temporarily unavailable.
+    }
+  }
+
   const now = new Date();
   const bucket = await prisma.rateLimitBucket.findUnique({
     where: { bucketKey: key }

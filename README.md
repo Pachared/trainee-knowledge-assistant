@@ -13,7 +13,7 @@ Trainee Knowledge Assistant คือ web application สำหรับอั�
 - AI: OpenAI Responses API และ Embeddings API
 - File processing: PDF/TXT upload, path sanitization, PDF parser, text chunking
 - Testing: Vitest integration tests และ Playwright e2e tests
-- Deploy/runtime: Dockerfile + Docker Compose
+- Deploy/runtime: Dockerfile + Docker Compose พร้อม web, worker, Chroma และ Redis
 
 ## Setup & Run
 
@@ -44,10 +44,12 @@ DATABASE_URL=file:/app/data/db/dev.db
 
 1. สร้าง image ของ Next.js app
 2. start Chroma และรอให้ healthcheck ผ่าน
-3. start web container
-4. รัน `prisma migrate deploy`
-5. รัน `npm run db:seed` เพื่อสร้าง mock user
-6. start Next.js standalone server ที่ port `3000`
+3. start Redis สำหรับ rate limit
+4. start web container
+5. รัน `prisma migrate deploy`
+6. รัน `npm run db:seed` เพื่อสร้าง mock user
+7. start Next.js standalone server ที่ port `3000`
+8. start document worker สำหรับ parse/chunk/embed/index เอกสารแบบ background
 
 ## Local Development
 
@@ -80,13 +82,15 @@ npm run test:docker:rag
 - [x] Validate file type, extension, size และ sanitize filename/path
 - [x] Extract text จาก PDF/TXT
 - [x] Chunk เอกสารพร้อม token estimate
+- [x] Background document worker พร้อม job lock, retry/backoff และ stale lock recovery
+- [x] Summary cache ต่อเอกสารด้วย `DocumentSummary`
 - [x] Embedding ด้วย OpenAI หรือ deterministic fallback เมื่อไม่มี key
 - [x] Index chunks เข้า Chroma
 - [x] Chat with AI ด้วย OpenAI Responses API
 - [x] Chat with uploaded document context
 - [x] RAG retrieval จาก Chroma
-- [x] SQLite fallback search เมื่อ Chroma ใช้งานไม่ได้
-- [x] สรุปทั้งเอกสารเมื่อผู้ใช้เลือกเอกสารและถามแนว “สรุปทั้งหมด”
+- [x] SQLite fallback search แบบ ranking หลายคำ เมื่อ Chroma ใช้งานไม่ได้
+- [x] สรุปทั้งเอกสารแบบละเอียดเมื่อผู้ใช้เลือกเอกสารและถามแนว “สรุปทั้งหมด”
 - [x] Citation metadata จาก chunks ที่ใช้ตอบ
 - [x] Markdown rendering ในคำตอบ AI
 - [x] Streaming response ผ่าน Server-Sent Events
@@ -96,8 +100,8 @@ npm run test:docker:rag
 - [x] Delete document
 - [x] Retry indexing และ re-index Chroma
 - [x] Diagnostics API และหน้า Admin diagnostics
-- [x] Rate limit และ storage quota ต่อ user
-- [x] Docker Compose + healthcheck
+- [x] Rate limit ผ่าน Redis พร้อม SQLite fallback และ storage quota ต่อ user
+- [x] Docker Compose + healthcheck สำหรับ web, worker, Chroma และ Redis
 - [x] Integration tests และ e2e tests
 
 ## Architecture
@@ -110,7 +114,9 @@ Browser / MUI UI
   -> Next.js API Routes
   -> Service layer
   -> Prisma + SQLite
+  -> Document worker
   -> Chroma
+  -> Redis
   -> OpenAI
 ```
 
@@ -119,15 +125,16 @@ Browser / MUI UI
 - `src/app`: pages และ API route handlers
 - `src/components`: UI components แยกตาม feature เช่น chat, upload, sidebar
 - `src/lib/auth`: login, session, current user
-- `src/lib/documents`: upload, file storage, PDF/TXT extraction, document lifecycle
-- `src/lib/rag`: chunk retrieval, Chroma client, embeddings
+- `src/lib/documents`: upload, file storage, PDF/TXT extraction, document lifecycle, job lock/retry
+- `src/lib/rag`: chunk retrieval, fallback search, summary cache helpers, Chroma client, embeddings
 - `src/lib/ai`: OpenAI client, prompt builder, streaming response, token usage
-- `src/lib/security`: rate limit, quota, input sanitization
+- `src/lib/security`: Redis/SQLite rate limit, quota, input sanitization
 - `src/lib/admin`: diagnostics checks
+- `src/lib/observability`: structured logging helpers
 - `prisma`: schema, migrations, seed
 - `tests`: Vitest integration/unit tests
 - `e2e`: Playwright tests
-- `scripts`: helper scripts เช่น local Chroma และ cleanup test database
+- `scripts`: document worker, e2e web server, local Chroma และ cleanup test database
 
 ## Main Flow
 
@@ -137,21 +144,27 @@ Browser / MUI UI
 
 ### 2. Upload Document
 
-ผู้ใช้อัปโหลด PDF/TXT ผ่านหน้า upload ระบบจะ validate type/size, sanitize filename, save file ลง upload directory, extract text, split เป็น chunks แล้วบันทึก metadata ลง SQLite
+ผู้ใช้อัปโหลด PDF/TXT ผ่านหน้า upload ระบบจะ validate type/size, sanitize filename, save file ลง upload directory แล้วสร้าง record เอกสารใน SQLite ด้วยสถานะ `queued` เพื่อให้ request ตอบกลับเร็วขึ้น
 
-### 3. Index to Chroma
+### 3. Background Document Worker
 
-ระบบสร้าง embeddings ให้ chunks แล้วส่งเข้า Chroma พร้อม metadata เช่น `userId`, `documentId`, `chunkId`, `chunkIndex` ถ้า Chroma ล้มเหลว เอกสารจะอยู่สถานะ `ready_without_chroma` และแสดง `failedReason`
+worker จะ claim งานจากเอกสารสถานะ `queued` โดยใช้ lock metadata เช่น `lockedBy`, `lockedAt`, `nextAttemptAt` จากนั้น parse PDF/TXT, split เป็น chunks, สร้าง summary cache, สร้าง embeddings และ index เข้า Chroma ถ้า parse fail แบบถาวร เช่น PDF เสีย จะเป็น `failed` พร้อม `failedReason` ถ้า Chroma fail จะเป็น `ready_without_chroma` และ retry ตาม backoff
 
-### 4. Chat
+### 4. Index to Chroma
+
+ระบบสร้าง embeddings ให้ chunks แล้วส่งเข้า Chroma พร้อม metadata เช่น `userId`, `documentId`, `chunkId`, `chunkIndex` ถ้า Chroma ใช้งานไม่ได้ ระบบยังคงมี chunks ใน SQLite และใช้ fallback search แบบ ranking หลายคำแทนการค้นแค่ keyword แรก
+
+### 5. Chat
 
 เมื่อผู้ใช้ถามคำถาม ระบบจะสร้างหรือใช้ chat session เดิม แล้วดึง context จาก Chroma จากนั้นส่ง prompt เข้า OpenAI และ stream คำตอบกลับมาที่ UI
 
-### 5. Summarize Whole Document
+### 6. Summarize Whole Document
 
-ถ้าผู้ใช้เลือกเอกสารและถามแนวสรุปทั้งเอกสาร เช่น “ช่วยสรุปเอกสารนี้ทั้งหมด” ระบบจะไม่ใช้ top-k retrieval แต่จะดึง chunks ของเอกสารนั้นจาก SQLite ตามลำดับ `chunkIndex` เพื่อให้ context ครอบคลุมทั้งเอกสารเท่าที่ limit อนุญาต
+ถ้าผู้ใช้เลือกเอกสารและถามแนวสรุปทั้งเอกสาร เช่น “ช่วยสรุปเอกสารนี้ทั้งหมด” ระบบจะใช้ summary cache ของเอกสารร่วมกับ chunks ตามลำดับ `chunkIndex` และมี context fitting เพื่อกัน context ใหญ่เกิน model
 
-### 6. Usage
+summary cache เวอร์ชันปัจจุบันจะสร้างจากทุก chunk ของเอกสาร ไม่สุ่มหรือดึงเฉพาะบางช่วงเหมือน RAG top-k ปกติ จากนั้น prompt จะเข้าสู่โหมดสรุปแบบละเอียด โดยกำชับให้ครอบคลุมภาพรวม, ประเด็นสำคัญทั้งหมด, รายละเอียดตามลำดับเอกสาร, ข้อสรุป และข้อจำกัดหรือสิ่งที่ยังไม่ชัดเจน พร้อม citation เมื่อใช้ข้อมูลจาก context
+
+### 7. Usage
 
 หลัง AI ตอบเสร็จ ระบบบันทึก prompt tokens และ completion tokens ลง SQLite โดยใช้ usage จริงจาก OpenAI response เมื่อมี API key
 
@@ -170,17 +183,22 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 DATABASE_URL=file:./dev.db
 CHROMA_URL=http://localhost:8000
 CHROMA_COLLECTION=trainee_knowledge_chunks
+RATE_LIMIT_REDIS_URL=redis://localhost:6379
 UPLOAD_DIR=data/uploads
 MAX_UPLOAD_MB=10
 MAX_DOCUMENTS_PER_USER=50
 MAX_STORAGE_MB_PER_USER=100
 MAX_DAILY_CHAT_MESSAGES_PER_USER=200
+DOCUMENT_WORKER_BATCH_SIZE=3
+DOCUMENT_WORKER_INTERVAL_MS=3000
+DOCUMENT_WORKER_MAX_ATTEMPTS=3
+DOCUMENT_WORKER_LOCK_TIMEOUT_MS=300000
 COOKIE_SECURE=false
 FULL_DOCUMENT_CONTEXT_MAX_CHUNKS=200
 FULL_DOCUMENT_CONTEXT_MAX_TOKENS=120000
 ```
 
-หมายเหตุ: production ควรใช้ Docker secrets หรือ secret manager แทนการเก็บ secret ตรงใน `.env`
+หมายเหตุ: production ควรใช้ Docker secrets หรือ secret manager แทนการเก็บ secret ตรงใน `.env` โดยมีตัวอย่างใน `docker-compose.prod.yml` และ `docs/production-secrets.md`
 
 ## Diagnostics
 
@@ -188,8 +206,10 @@ FULL_DOCUMENT_CONTEXT_MAX_TOKENS=120000
 
 - OpenAI API key และ live embedding check
 - Chroma connection และ collection
+- Redis rate limit connection
 - Database migration status
 - Upload directory writable
+- Operational metrics เช่นจำนวนเอกสารตามสถานะ, stale processing jobs, token usage รวม
 
 เข้าใช้งานผ่าน:
 
@@ -206,9 +226,9 @@ curl http://localhost:3000/api/admin/diagnostics
 ## Known Issues
 
 - Auth ยังเป็น mock user เดียว ยังไม่มีระบบ user management จริง
-- Rate limit ยังเป็น in-memory `Map` ถ้า restart container ข้อมูลจะหาย และถ้า scale หลาย instance จะนับแยกกัน
-- Upload, PDF parsing, embedding และ Chroma indexing ยังทำใน request เดียว ถ้าเอกสารใหญ่มากอาจช้า ควรแยกเป็น background job
-- การสรุปทั้งเอกสารมี limit เพื่อกัน context ใหญ่เกิน model ถ้าเอกสารใหญ่มากควรเพิ่ม map-reduce summarization
+- Worker เป็น background polling worker พร้อม lock/retry แล้ว แต่ถ้าปริมาณงานสูงมากควรใช้ queue จริง เช่น BullMQ/Redis streams พร้อม dead-letter queue
+- Rate limit ใช้ Redis เมื่อกำหนด `RATE_LIMIT_REDIS_URL` และ fallback เป็น SQLite แต่ production หลาย instance ควรบังคับ Redis ให้พร้อมใช้งานเสมอ
+- การสรุปทั้งเอกสารครอบคลุมทุก chunk ผ่าน summary cache และ context fitting แล้ว แต่เอกสารใหญ่มากยังควรเพิ่ม map-reduce summarization แบบหลายชั้นเพื่อสรุประดับ section/chapter ให้ละเอียดขึ้นโดยไม่ชน context limit
 - SQLite เหมาะกับ assignment/local demo แต่ production ที่มีผู้ใช้พร้อมกันจำนวนมากควรพิจารณา PostgreSQL
-- Chroma reconciliation ยังเป็น manual re-index ยังไม่มี scheduled job ตรวจ DB กับ Chroma ว่าตรงกันเสมอ
-- OpenAI error handling ยังควรแยกข้อความให้ละเอียดขึ้น เช่น quota, invalid key, timeout, model unavailable
+- Chroma reconciliation ยังเป็น manual re-index/admin endpoint ยังไม่มี scheduled reconciliation อัตโนมัติ
+- Observability มี diagnostics และ structured worker logs แล้ว แต่ยังไม่มี external metrics/alerting เช่น Prometheus หรือ OpenTelemetry

@@ -1,0 +1,41 @@
+import { describe, expect, it } from "vitest";
+import { buildExtractiveDocumentSummary, hashSummarySource } from "@/lib/rag/document-summary";
+
+describe("document summary cache helpers", () => {
+  it("builds a compact ordered extractive summary from chunks", () => {
+    const summary = buildExtractiveDocumentSummary(
+      [
+        { chunkIndex: 0, content: "บทนำของเอกสารเกี่ยวกับระบบ RAG และการค้นคืนข้อมูล" },
+        { chunkIndex: 1, content: "รายละเอียดการ upload เอกสารและ indexing ด้วย Chroma" },
+        { chunkIndex: 2, content: "สรุปท้ายเอกสารเกี่ยวกับ citation และ token usage" }
+      ],
+      "คู่มือระบบ"
+    );
+
+    expect(summary).toContain("คู่มือระบบ");
+    expect(summary).toContain("ส่วนที่ 1");
+    expect(summary).toContain("ส่วนที่ 3");
+    expect(summary.length).toBeLessThan(1_500);
+  });
+
+  it("covers every chunk instead of sampling only a few sections", () => {
+    const chunks = Array.from({ length: 20 }, (_, index) => ({
+      chunkIndex: index,
+      content: `รายละเอียดเฉพาะส่วน ${index + 1} ที่ต้องไม่หายไปจาก summary`
+    }));
+
+    const summary = buildExtractiveDocumentSummary(chunks, "เอกสารยาว");
+
+    expect(summary).toContain("ครอบคลุม 20 chunks");
+    expect(summary).toContain("ส่วนที่ 1");
+    expect(summary).toContain("ส่วนที่ 20");
+    expect(summary).toContain("รายละเอียดเฉพาะส่วน 20");
+  });
+
+  it("hashes source chunks deterministically", () => {
+    const source = [{ chunkIndex: 0, content: "abc" }];
+
+    expect(hashSummarySource(source)).toBe(hashSummarySource(source));
+    expect(hashSummarySource(source)).not.toBe(hashSummarySource([{ chunkIndex: 0, content: "xyz" }]));
+  });
+});

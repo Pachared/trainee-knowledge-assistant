@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getNumberEnv } from "@/lib/env";
 import { embedText, embedTexts } from "@/lib/rag/embeddings";
 import { getChromaCollection } from "@/lib/rag/chroma";
+import { rankFallbackChunks } from "@/lib/rag/fallback-search";
 
 export type RetrievedContext = {
   chunkId: string;
@@ -100,7 +101,6 @@ export async function retrieveContext(input: {
 
   const fallbackChunks = await prisma.documentChunk.findMany({
     where: {
-      content: { contains: input.query.split(/\s+/)[0] || input.query },
       document: {
         userId: input.userId,
         ...(input.documentId ? { id: input.documentId } : {})
@@ -109,16 +109,10 @@ export async function retrieveContext(input: {
     include: {
       document: true
     },
-    take: limit,
     orderBy: { createdAt: "desc" }
   });
 
-  return fallbackChunks.map((chunk) => ({
-    chunkId: chunk.id,
-    documentTitle: chunk.document.title,
-    content: chunk.content,
-    score: 0
-  }));
+  return rankFallbackChunks(fallbackChunks, input.query, limit);
 }
 
 export async function retrieveWholeDocumentContext(input: {
@@ -129,22 +123,44 @@ export async function retrieveWholeDocumentContext(input: {
 }): Promise<RetrievedContext[]> {
   const maxChunks = input.maxChunks ?? getNumberEnv("FULL_DOCUMENT_CONTEXT_MAX_CHUNKS", 200);
   const maxTokens = input.maxTokens ?? getNumberEnv("FULL_DOCUMENT_CONTEXT_MAX_TOKENS", 120_000);
-  const chunks = await prisma.documentChunk.findMany({
-    where: {
-      documentId: input.documentId,
-      document: {
-        userId: input.userId
+  const [summary, chunks] = await Promise.all([
+    prisma.documentSummary.findFirst({
+      where: {
+        documentId: input.documentId,
+        document: {
+          userId: input.userId
+        }
+      },
+      include: {
+        document: true
       }
-    },
-    include: {
-      document: true
-    },
-    orderBy: { chunkIndex: "asc" },
-    take: maxChunks
-  });
+    }),
+    prisma.documentChunk.findMany({
+      where: {
+        documentId: input.documentId,
+        document: {
+          userId: input.userId
+        }
+      },
+      include: {
+        document: true
+      },
+      orderBy: { chunkIndex: "asc" },
+      take: maxChunks
+    })
+  ]);
 
-  let usedTokens = 0;
+  let usedTokens = summary?.tokenCount ?? 0;
   const contexts: RetrievedContext[] = [];
+
+  if (summary) {
+    contexts.push({
+      chunkId: summary.id,
+      documentTitle: `${summary.document.title} - summary`,
+      content: summary.content,
+      score: 0
+    });
+  }
 
   for (const chunk of chunks) {
     const nextTokens = usedTokens + chunk.tokenCount;

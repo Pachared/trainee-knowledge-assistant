@@ -6,6 +6,7 @@ Supported secret file variables:
 
 - `OPENAI_API_KEY_FILE`
 - `OPENAI_API_KEYS_FILE`
+- `RATE_LIMIT_REDIS_URL_FILE`
 - `SESSION_SECRET_FILE`
 - `MOCK_ADMIN_USERNAME_FILE`
 - `MOCK_ADMIN_PASSWORD_FILE`
@@ -17,5 +18,13 @@ Run with both files:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.secrets.example.yml up --build
 ```
+
+For a stricter production compose profile, use:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
+```
+
+`docker-compose.prod.yml` switches cookies to secure mode, uses Docker secrets for sensitive values, enables Redis persistence for rate limiting, and keeps Chroma/web/worker on restart policies.
 
 For managed production platforms, map the platform secret manager output to either the regular env var or the matching `_FILE` env var. Do not commit real secret values.

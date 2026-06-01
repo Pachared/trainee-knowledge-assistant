@@ -142,6 +142,38 @@
 
 **Prompt:** ช่วยเช็คทั้งระบบของ Project นี้ว่าส่วนไหนที่ยังไปไม่สุดและอธิบายว่าทำไม
 
-**AI Response:** รัน `npm test`, `npm run lint`, `npm run build`, ตรวจ Docker health และ diagnostics แล้วสรุปว่า core assignment ใช้งานได้ แต่ยังมี gap เช่น mock auth, in-memory rate limit, synchronous upload/indexing, map-reduce summarization สำหรับเอกสารใหญ่มาก และ production secret handling
+**AI Response:** รัน `npm test`, `npm run lint`, `npm run build`, ตรวจ Docker health และ diagnostics แล้วสรุปว่า core assignment ใช้งานได้ แต่ ณ เวลานั้นยังมี gap เช่น mock auth, in-memory rate limit, synchronous upload/indexing, map-reduce summarization สำหรับเอกสารใหญ่มาก และ production secret handling
 
-**My Adjustment:** ผู้ใช้ต้องการเอกสารอธิบาย project จึงให้สร้าง README, AI_JOURNAL และ DECISIONS เป็นภาษาไทยทั้งหมด
+**My Adjustment:** ผู้ใช้ต้องการให้จัดลำดับ gap ที่ควรทำต่อและให้ระบบใช้งานได้สมบูรณ์ขึ้น จึงใช้ผล audit นี้เป็นรายการงานต่อเนื่อง เช่น แยก indexing เป็น background worker, เพิ่ม rate limit ที่แข็งแรงขึ้น, ปรับสรุปเอกสารใหญ่ และเพิ่ม production hardening
+
+## Session 19: ทำระบบที่ยังไม่สมบูรณ์ให้ใช้งานได้มากขึ้น
+
+**Prompt:** ให้ทำระบบต่อที่ยังไม่สมบูรณ์ โดยโฟกัส Chroma local, Docker Compose คำสั่งเดียว, สรุปเอกสารทั้งไฟล์, และตรวจว่าระบบยังมีส่วนไหนใช้งานไม่ได้
+
+**AI Response:** แก้ Chroma local ให้ใช้งานกับ Docker Compose ได้จริง, เพิ่ม document worker แยกจาก request, เพิ่ม retry/re-index, ปรับ flow upload ให้เอกสารเข้า `queued` แล้ว worker เปลี่ยนเป็น `ready`, เพิ่ม full-document context handling และตรวจด้วย Docker, integration test, e2e test
+
+**My Adjustment:** ผู้ใช้รัน `docker compose up` จริงและส่ง log กลับมา ทำให้ต้องแก้ Docker image tag, `.dockerignore`, startup migration/seed, cookie secure mode, และตรวจ flow จริงแบบ login -> upload -> ready -> chat citation
+
+## Session 20: เพิ่มความแข็งแรงข้อ 2-8 หลัง audit
+
+**Prompt:** ให้ทำตั้งแต่ข้อ 2-8 ที่แนะนำไว้ ได้แก่ worker/job queue, Redis rate limit, fallback search, summary strategy, production secrets, observability และ tests เพิ่มเติม พร้อมตรวจซ้ำว่าระบบใช้งานได้ปกติ
+
+**AI Response:** เพิ่ม job lock/retry/backoff ให้ document worker, เพิ่ม fields `indexingAttempts`, `lockedBy`, `lockedAt`, `nextAttemptAt`, `lastIndexedAt`, เพิ่ม `DocumentSummary` สำหรับ summary cache, เพิ่ม Redis-backed rate limit พร้อม SQLite fallback, เพิ่ม Redis service ใน Docker Compose, เพิ่ม fallback search แบบ ranking หลายคำ, เพิ่ม diagnostics สำหรับ Redis และ operational metrics, เพิ่ม structured worker logs, เพิ่ม `docker-compose.prod.yml` และอัปเดต tests
+
+**My Adjustment:** ผู้ใช้ต้องการให้เอกสารประกอบ project ตรงกับระบบล่าสุด จึงให้กลับมาเช็ค README, AI_JOURNAL และ DECISIONS ให้สะท้อนระบบจริง ไม่ใช่ข้อมูลเก่าก่อนเพิ่ม worker/Redis/summary cache
+
+## Session 21: ตรวจและแก้เอกสารให้ตรงกับระบบล่าสุด
+
+**Prompt:** ให้เข้าไปเช็ค `README.md`, `AI_JOURNAL.md`, `DECISIONS.md` และใส่ให้เหมือนกับระบบ
+
+**AI Response:** ตรวจพบว่า README บางส่วนอัปเดตแล้ว แต่ Main Flow ยังอธิบาย upload/indexing แบบ synchronous และ DECISIONS ยังมี decision เก่าเรื่อง synchronous upload/indexing จึงต้องปรับเอกสารให้ตรงกับระบบล่าสุดที่มี worker, Redis, summary cache, fallback ranking, diagnostics และ production compose
+
+**My Adjustment:** ผู้ใช้ต้องการเอกสารภาษาไทยที่อ่านต่อเนื่องและอธิบายเหตุผลเชิงสถาปัตยกรรมได้ตรงกับ implementation ปัจจุบัน
+
+## Session 22: ปรับสรุปเอกสารให้ละเอียดและครอบคลุมกว่าเดิม
+
+**Prompt:** ฉันอยากได้ให้มันสรุปแบบระเอียดที่ครอบคลุมทั้งหมดในข้อมูลที่เอกสารมี
+
+**AI Response:** เพิ่ม test เพื่อยืนยันว่า summary cache ต้องครอบคลุมทุก chunk ไม่ใช่ sampling เฉพาะบางส่วน และเพิ่ม test ให้ prompt มีคำสั่งสรุปแบบละเอียด จากนั้นปรับ `buildExtractiveDocumentSummary` ให้เรียงทุก chunk ตามลำดับเอกสาร, เพิ่ม summary source version เพื่อบังคับ regenerate cache, และส่ง `summaryMode: "comprehensive"` เข้า assistant prompt เมื่อผู้ใช้ถามสรุปทั้งเอกสาร
+
+**My Adjustment:** ผู้ใช้ต้องการให้ผลสรุปไม่ตกหล่นเนื้อหาสำคัญ จึงต้องเปลี่ยนพฤติกรรมจาก “ดึง context บางส่วนที่เกี่ยวข้อง” เป็น “ใช้ภาพรวมและทุกส่วนของเอกสารเท่าที่ token budget อนุญาต” พร้อมตรวจด้วย test, lint และ production build

@@ -7,6 +7,7 @@ import { getChromaConfig, getOpenAIKeys } from "@/lib/env";
 import { getUploadDir } from "@/lib/documents/file-storage";
 import { getChromaCollection } from "@/lib/rag/chroma";
 import { getOpenAIClient, getOpenAIEmbeddingModel, getOpenAIModel } from "@/lib/ai/openai-client";
+import { checkRedisConnection } from "@/lib/security/redis-rate-limit";
 
 type DiagnosticStatus = "ok" | "warning" | "error";
 
@@ -161,18 +162,59 @@ async function checkOpenAI() {
   }
 }
 
+async function getOperationalMetrics() {
+  const [documentsByStatus, usage, chatSessions, staleProcessing] = await Promise.all([
+    prisma.document.groupBy({
+      by: ["status"],
+      _count: { _all: true }
+    }),
+    prisma.tokenUsage.aggregate({
+      _sum: {
+        promptTokens: true,
+        completionTokens: true,
+        totalTokens: true
+      },
+      _count: { _all: true }
+    }),
+    prisma.chatSession.count(),
+    prisma.document.count({
+      where: {
+        status: "processing",
+        lockedAt: {
+          lt: new Date(Date.now() - 5 * 60_000)
+        }
+      }
+    })
+  ]);
+
+  return {
+    status: "ok" as DiagnosticStatus,
+    documentsByStatus: Object.fromEntries(documentsByStatus.map((row) => [row.status, row._count._all])),
+    staleProcessing,
+    chatSessions,
+    usageRecords: usage._count._all,
+    totalPromptTokens: usage._sum.promptTokens ?? 0,
+    totalCompletionTokens: usage._sum.completionTokens ?? 0,
+    totalTokens: usage._sum.totalTokens ?? 0
+  };
+}
+
 export async function getAdminDiagnostics() {
-  const [chroma, database, uploadDirectory, openai] = await Promise.all([
+  const [chroma, database, uploadDirectory, openai, redis, metrics] = await Promise.all([
     checkChroma(),
     checkDatabaseMigrations(),
     checkUploadDirectory(),
-    checkOpenAI()
+    checkOpenAI(),
+    checkRedisConnection(),
+    getOperationalMetrics()
   ]);
 
   return {
     chroma,
     database,
+    metrics,
     openai,
+    redis,
     uploadDirectory
   };
 }

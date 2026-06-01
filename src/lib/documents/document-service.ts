@@ -3,9 +3,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 import { getNumberEnv } from "@/lib/env";
+import { computeDocumentRetryDelayMs } from "@/lib/documents/document-job";
 import { saveUpload } from "@/lib/documents/file-storage";
 import { extractTextFromFile } from "@/lib/documents/extract-text";
 import { chunkText } from "@/lib/rag/chunker";
+import { buildExtractiveDocumentSummary, estimateSummaryTokens, hashSummarySource } from "@/lib/rag/document-summary";
 import { deleteDocumentFromChroma, indexChunksInChroma } from "@/lib/rag/rag-service";
 import { uploadConstraints } from "@/lib/validation/schemas";
 
@@ -31,6 +33,17 @@ export function formatFailureReason(error: unknown) {
   return message.slice(0, 1000);
 }
 
+function isPermanentDocumentFailure(error: unknown) {
+  const message = formatFailureReason(error).toLowerCase();
+  return [
+    "invalid pdf",
+    "ไม่พบข้อความในไฟล์",
+    "รองรับเฉพาะไฟล์",
+    "ไฟล์ว่างเปล่า",
+    "ไฟล์ใหญ่เกิน"
+  ].some((pattern) => message.includes(pattern));
+}
+
 export async function uploadDocument(userId: string, file: File) {
   validateUpload(file);
 
@@ -45,7 +58,11 @@ export async function uploadDocument(userId: string, file: File) {
       size: file.size,
       path: saved.path,
       status: "queued",
-      failedReason: null
+      failedReason: null,
+      indexingAttempts: 0,
+      lockedAt: null,
+      lockedBy: null,
+      nextAttemptAt: null
     }
   });
 
@@ -59,7 +76,69 @@ export async function uploadDocument(userId: string, file: File) {
   });
 }
 
-export async function processDocument(documentId: string) {
+async function clearJobLock(documentId: string, data: Record<string, unknown>) {
+  return prisma.document.update({
+    where: { id: documentId },
+    data: {
+      ...data,
+      lockedAt: null,
+      lockedBy: null
+    }
+  });
+}
+
+async function retryOrFailDocument(document: { id: string; indexingAttempts: number }, error: unknown) {
+  const maxAttempts = getNumberEnv("DOCUMENT_WORKER_MAX_ATTEMPTS", 3);
+  const nextAttempts = document.indexingAttempts + 1;
+  const failedReason = formatFailureReason(error);
+
+  if (!isPermanentDocumentFailure(error) && nextAttempts < maxAttempts) {
+    return clearJobLock(document.id, {
+      status: "queued",
+      failedReason,
+      indexingAttempts: nextAttempts,
+      nextAttemptAt: new Date(Date.now() + computeDocumentRetryDelayMs(nextAttempts))
+    });
+  }
+
+  return clearJobLock(document.id, {
+    status: "failed",
+    failedReason,
+    indexingAttempts: nextAttempts,
+    nextAttemptAt: null
+  });
+}
+
+async function upsertDocumentSummary(documentId: string, title: string, chunks: Array<{ chunkIndex: number; content: string }>) {
+  const sourceHash = hashSummarySource(chunks);
+  const existing = await prisma.documentSummary.findUnique({
+    where: { documentId }
+  });
+
+  if (existing?.sourceHash === sourceHash) {
+    return existing;
+  }
+
+  const content = buildExtractiveDocumentSummary(chunks, title);
+
+  return prisma.documentSummary.upsert({
+    where: { documentId },
+    update: {
+      content,
+      tokenCount: estimateSummaryTokens(content),
+      sourceHash,
+      generatedAt: new Date()
+    },
+    create: {
+      documentId,
+      content,
+      tokenCount: estimateSummaryTokens(content),
+      sourceHash
+    }
+  });
+}
+
+export async function processDocument(documentId: string, workerId = "manual") {
   const document = await prisma.document.findUnique({
     where: { id: documentId }
   });
@@ -72,7 +151,9 @@ export async function processDocument(documentId: string) {
     where: { id: document.id },
     data: {
       status: "processing",
-      failedReason: null
+      failedReason: null,
+      lockedAt: new Date(),
+      lockedBy: workerId
     }
   });
 
@@ -103,6 +184,14 @@ export async function processDocument(documentId: string) {
         })
       )
     );
+    await upsertDocumentSummary(
+      document.id,
+      document.title,
+      storedChunks.map((chunk) => ({
+        chunkIndex: chunk.chunkIndex,
+        content: chunk.content
+      }))
+    );
 
     try {
       await indexChunksInChroma({
@@ -115,17 +204,23 @@ export async function processDocument(documentId: string) {
           chunkIndex: chunk.chunkIndex
         }))
       });
-      await prisma.document.update({
-        where: { id: document.id },
-        data: { status: "ready", failedReason: null }
+      await clearJobLock(document.id, {
+        status: "ready",
+        failedReason: null,
+        indexingAttempts: 0,
+        nextAttemptAt: null,
+        lastIndexedAt: new Date()
       });
     } catch (error) {
-      await prisma.document.update({
-        where: { id: document.id },
-        data: {
-          status: "ready_without_chroma",
-          failedReason: `Chroma indexing failed: ${formatFailureReason(error)}`
-        }
+      const nextAttempts = document.indexingAttempts + 1;
+      const maxAttempts = getNumberEnv("DOCUMENT_WORKER_MAX_ATTEMPTS", 3);
+      await clearJobLock(document.id, {
+        status: "ready_without_chroma",
+        failedReason: `Chroma indexing failed: ${formatFailureReason(error)}`,
+        indexingAttempts: nextAttempts,
+        nextAttemptAt: nextAttempts < maxAttempts
+          ? new Date(Date.now() + computeDocumentRetryDelayMs(nextAttempts))
+          : null
       });
     }
 
@@ -138,35 +233,71 @@ export async function processDocument(documentId: string) {
       }
     });
   } catch (error) {
-    return prisma.document.update({
-      where: { id: document.id },
-      data: {
-        status: "failed",
-        failedReason: formatFailureReason(error)
-      }
-    });
+    return retryOrFailDocument(document, error);
   }
 }
 
-export async function processNextQueuedDocument() {
+export async function claimNextDocumentJob(workerId: string) {
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - getNumberEnv("DOCUMENT_WORKER_LOCK_TIMEOUT_MS", 5 * 60_000));
   const document = await prisma.document.findFirst({
-    where: { status: "queued" },
+    where: {
+      OR: [
+        {
+          status: "queued",
+          OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }]
+        },
+        {
+          status: "processing",
+          lockedAt: { lt: staleBefore }
+        },
+        {
+          status: "ready_without_chroma",
+          nextAttemptAt: { lte: now }
+        }
+      ]
+    },
     orderBy: { createdAt: "asc" },
-    select: { id: true }
+    select: { id: true, status: true, lockedAt: true }
   });
 
   if (!document) {
     return null;
   }
 
-  return processDocument(document.id);
+  const claimed = await prisma.document.updateMany({
+    where: {
+      id: document.id,
+      OR: [
+        { status: document.status, lockedAt: document.lockedAt },
+        { status: document.status, lockedAt: null }
+      ]
+    },
+    data: {
+      status: "processing",
+      lockedAt: now,
+      lockedBy: workerId
+    }
+  });
+
+  return claimed.count === 1 ? document.id : null;
 }
 
-export async function processQueuedDocuments(limit = 5) {
+export async function processNextQueuedDocument(workerId = "worker") {
+  const documentId = await claimNextDocumentJob(workerId);
+
+  if (!documentId) {
+    return null;
+  }
+
+  return processDocument(documentId, workerId);
+}
+
+export async function processQueuedDocuments(limit = 5, workerId = "worker") {
   const processed = [];
 
   for (let index = 0; index < limit; index += 1) {
-    const document = await processNextQueuedDocument();
+    const document = await processNextQueuedDocument(workerId);
     if (!document) {
       break;
     }

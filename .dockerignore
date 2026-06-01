@@ -2,6 +2,8 @@ node_modules
 node_modules/
 .next
 .next/
+.next-stale-*
+.next-stale-*/
 .git
 .env
 .env.local
@@ -12,6 +14,7 @@ data
 data/uploads
 data/chroma
 data/db
+secrets
 *.db
 *.db-journal
 prisma/dev.db

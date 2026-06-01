@@ -9,6 +9,7 @@ services:
     environment:
       DATABASE_URL: "file:/app/data/db/dev.db"
       CHROMA_URL: "http://chroma:8000"
+      RATE_LIMIT_REDIS_URL: "redis://redis:6379"
       COOKIE_SECURE: "false"
     ports:
       - "3000:3000"
@@ -18,6 +19,8 @@ services:
     depends_on:
       chroma:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
@@ -26,21 +29,28 @@ services:
 
   worker:
     image: trainee-knowledge-assistant-web:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     command: ["npm", "run", "worker:documents"]
     env_file:
       - .env
     environment:
       DATABASE_URL: "file:/app/data/db/dev.db"
       CHROMA_URL: "http://chroma:8000"
+      RATE_LIMIT_REDIS_URL: "redis://redis:6379"
     volumes:
       - sqlite-data:/app/data/db
       - uploads:/app/data/uploads
     depends_on:
       web:
         condition: service_healthy
+
+  redis:
+    image: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   chroma:
     image: chromadb/chroma@sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6

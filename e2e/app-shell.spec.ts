@@ -125,7 +125,9 @@ test.describe("admin diagnostics", () => {
     await expect(page.getByRole("heading", { name: "Admin diagnostics" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "OpenAI" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Chroma" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Redis rate limit" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Database" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Operational metrics" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Upload directory" })).toBeVisible();
   });
 });

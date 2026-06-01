@@ -50,12 +50,14 @@ export async function POST(request: Request) {
       await updateChatTitleFromPrompt(chat.id, message);
     }
 
+    const summaryDocumentId = body.documentId && isWholeDocumentSummaryRequest(message) ? body.documentId : undefined;
+    const isWholeDocumentSummary = Boolean(summaryDocumentId);
     const contexts =
-      body.documentId && isWholeDocumentSummaryRequest(message)
+      summaryDocumentId
         ? fitSummaryContextsToBudget(
             await retrieveWholeDocumentContext({
               userId: user.id,
-              documentId: body.documentId,
+              documentId: summaryDocumentId,
               maxTokens: Number.MAX_SAFE_INTEGER
             })
           )
@@ -69,7 +71,13 @@ export async function POST(request: Request) {
       role: item.role,
       content: item.content
     }));
-    const prompt = buildAssistantPrompt({ message, history, contexts });
+    const assistantInput = {
+      message,
+      history,
+      contexts,
+      summaryMode: isWholeDocumentSummary ? ("comprehensive" as const) : undefined
+    };
+    const prompt = buildAssistantPrompt(assistantInput);
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
@@ -91,10 +99,7 @@ export async function POST(request: Request) {
             )
           );
 
-          for await (const chunk of streamAssistantText(
-            { message, history, contexts },
-            { onUsage: (usage) => (actualUsage = usage) }
-          )) {
+          for await (const chunk of streamAssistantText(assistantInput, { onUsage: (usage) => (actualUsage = usage) })) {
             output += chunk;
             controller.enqueue(encoder.encode(sse("delta", { content: chunk })));
           }

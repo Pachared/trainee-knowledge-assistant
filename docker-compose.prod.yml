@@ -1,0 +1,56 @@
+services:
+  web:
+    image: trainee-knowledge-assistant-web:latest
+    restart: unless-stopped
+    env_file: []
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "file:/app/data/db/prod.db"
+      CHROMA_URL: "http://chroma:8000"
+      RATE_LIMIT_REDIS_URL: "redis://redis:6379"
+      COOKIE_SECURE: "true"
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      MOCK_ADMIN_PASSWORD_FILE: /run/secrets/mock_admin_password
+    secrets:
+      - openai_api_key
+      - session_secret
+      - mock_admin_password
+
+  worker:
+    image: trainee-knowledge-assistant-web:latest
+    restart: unless-stopped
+    env_file: []
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "file:/app/data/db/prod.db"
+      CHROMA_URL: "http://chroma:8000"
+      RATE_LIMIT_REDIS_URL: "redis://redis:6379"
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      MOCK_ADMIN_PASSWORD_FILE: /run/secrets/mock_admin_password
+    secrets:
+      - openai_api_key
+      - session_secret
+      - mock_admin_password
+
+  redis:
+    image: redis@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+  chroma:
+    restart: unless-stopped
+
+secrets:
+  openai_api_key:
+    file: ./secrets/openai_api_key.txt
+  session_secret:
+    file: ./secrets/session_secret.txt
+  mock_admin_password:
+    file: ./secrets/mock_admin_password.txt
+
+volumes:
+  redis-data:

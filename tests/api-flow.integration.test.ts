@@ -542,6 +542,13 @@ describe("knowledge assistant API flow", () => {
         embeddingModel: string;
         liveStatus: string;
       };
+      redis: { status: string; configured: boolean };
+      metrics: {
+        status: string;
+        documentsByStatus: Record<string, number>;
+        staleProcessing: number;
+        totalTokens: number;
+      };
       uploadDirectory: { status: string; path: string };
     }>(response);
 
@@ -555,6 +562,12 @@ describe("knowledge assistant API flow", () => {
     expect(payload.data?.openai.model).toBe("gpt-5");
     expect(payload.data?.openai.embeddingModel).toBe("text-embedding-3-small");
     expect(payload.data?.openai.liveStatus).toBe("ok");
+    expect(payload.data?.redis.status).toBe("warning");
+    expect(payload.data?.redis.configured).toBe(false);
+    expect(payload.data?.metrics.status).toBe("ok");
+    expect(payload.data?.metrics.documentsByStatus.ready).toBeGreaterThanOrEqual(0);
+    expect(payload.data?.metrics.staleProcessing).toBeGreaterThanOrEqual(0);
+    expect(payload.data?.metrics.totalTokens).toBeGreaterThanOrEqual(0);
     expect(payload.data?.uploadDirectory.status).toBe("ok");
     expect(payload.data?.uploadDirectory.path).toBe(uploadDir);
 
