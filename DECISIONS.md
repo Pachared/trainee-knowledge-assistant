@@ -314,6 +314,24 @@ Docker Compose local ยังขึ้นกับ Docker Desktop state แล�
 
 ข้อดีคือ fallback และ summary อ่านดีขึ้นทันทีโดยไม่เพิ่ม infrastructure ข้อเสียคือยังไม่เท่า vector search หรือ FTS5 ที่มี tokenizer เฉพาะภาษา ถ้าระบบต้องค้นภาษาไทยจำนวนมากควรเพิ่ม FTS/BM25 จริงหรือ search engine แยก และถ้าเอกสารใหญ่มากควรใช้ LLM map-reduce หลาย call แทน summary cache แบบ extractive อย่างเดียว
 
+## Decision 20: Cleanup เฉพาะของที่ไม่กระทบ runtime และลด dependency ที่ไม่ได้ใช้
+
+### Context
+
+หลังระบบพัฒนาเร็วหลายรอบ มีโฟลเดอร์ว่างและ output จาก build/test ค้างอยู่ใน workspace รวมถึง dependency บางตัวที่เคยเตรียมไว้แต่ไม่ได้ใช้จริง ผู้ใช้ต้องการ clean project โดยยังต้องรักษาระบบหลัก, เอกสาร, migration, Docker และ test workflow ให้ใช้งานต่อได้
+
+### Alternatives Considered
+
+ทางเลือกแรกคือลบทุกอย่างที่ดูเหมือนไม่ใช่ source เช่น `data`, scripts หรือ compose variants ซึ่งเสี่ยงทำให้ runtime/local workflow พัง ทางเลือกที่สองคือไม่ลบอะไรเลยและแค่รายงาน ซึ่งไม่ตอบโจทย์ cleanup ทางเลือกที่เหมาะคือแยกของที่เป็น generated output, empty folder และ unused dependency ออกจากของที่เป็น runtime/data/config สำคัญ
+
+### Why conservative cleanup
+
+เลือก cleanup แบบ conservative เพราะ project นี้มีหลาย workflow เช่น Docker Compose, e2e, RAG full integration, production secrets และ Prisma migrations ไฟล์เหล่านี้อาจไม่ได้ถูก import โดย TypeScript แต่ยังจำเป็นต่อระบบ จึงลบเฉพาะ `src/components/ui`, `src/components/layout` ที่เป็นโฟลเดอร์ว่าง, output/cache อย่าง `.next`, `.next-stale-*`, `playwright-report`, `test-results` และลบ `lucide-react` เพราะไม่มี import แล้วหลังระบบใช้ MUI icons ทั้งหมด
+
+### Trade-offs
+
+ข้อดีคือ project เบาขึ้นและ dependency ตรงกับ implementation จริงมากขึ้นโดยไม่กระทบ runtime ข้อเสียคือยังไม่ได้ทำ automated dead-code analyzer เต็มรูปแบบสำหรับทุก dependency ถ้าต้อง cleanup ลึกขึ้นควรเพิ่มเครื่องมือเช่น depcheck/knip แต่ต้องรันอย่างระวังเพราะ framework files, dynamic imports และ scripts มักถูกตรวจผิดว่าไม่ได้ใช้
+
 ## Decision 9: ใช้ Redis rate limit พร้อม SQLite fallback
 
 ### Context

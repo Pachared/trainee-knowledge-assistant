@@ -117,6 +117,7 @@ npm run test:docker:rag
 - [x] Citation preview endpoint สำหรับโหลด chunk ต้นทางจากเอกสารย้อนหลัง
 - [x] Protected file preview endpoint สำหรับเปิด PDF/TXT ต้นฉบับจาก citation
 - [x] Admin job monitor สำหรับดู queued/processing/failed/retry และสั่ง retry/cancel/reconcile
+- [x] Cleanup โครงสร้าง project โดยลบโฟลเดอร์ว่าง, build/test output และ dependency ที่ไม่ได้ใช้
 - [x] Empty state พร้อมปุ่ม action ในหน้า chat, upload และ usage
 - [x] Admin diagnostics และ error alert แสดง next step พร้อมปุ่มไปหน้าที่เกี่ยวข้อง
 
@@ -152,6 +153,8 @@ Browser / MUI UI
 - `tests`: Vitest integration/unit tests
 - `e2e`: Playwright tests
 - `scripts`: document worker, e2e web server, local Chroma และ cleanup test database
+
+โครงสร้าง component ตั้งใจเหลือเฉพาะหมวดที่ใช้จริง ได้แก่ `src/components/app`, `src/components/chat` และ `src/components/forms` ไม่มี `components/ui` หรือ `components/layout` ค้างไว้ เพราะระบบใช้ MUI component และ theme กลางเป็นหลัก
 
 ## Main Flow
 

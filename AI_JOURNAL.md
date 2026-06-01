@@ -225,3 +225,11 @@
 **AI Response:** เพิ่ม `totalChunks`, `processedChunks`, `embeddedChunks` ใน schema และ migration เพื่อให้ worker บอกความคืบหน้าต่อ chunk ได้จริงขึ้น, เปลี่ยน Chroma indexing เป็น batch พร้อม callback อัปเดต progress, เพิ่ม protected file endpoint `/api/documents/[documentId]/file`, ปรับ citation dialog ให้เปิดไฟล์ต้นฉบับและฝัง PDF preview ไปยังหน้าที่อ้างอิง, เพิ่ม `/api/admin/jobs` และ Job Monitor ในหน้า admin สำหรับดูคิวงาน retry/cancel/reconcile, ปรับ fallback search เป็น BM25-lite ที่รองรับภาษาไทยแบบ character n-gram และปรับ summary cache ให้จัดกลุ่มเอกสารยาวเป็น hierarchical sections พร้อมช่วงหน้า
 
 **My Adjustment:** ผู้ใช้ต้องการให้ระบบใช้งานจริงและตรวจซ้ำ จึงเพิ่ม test ก่อนแก้ code สำหรับ summary, fallback search, admin jobs, file preview และ progress fields จากนั้นรัน unit/integration, lint, build และเตรียมรัน Playwright/Docker ก่อน commit/push
+
+## Session 29: Cleanup ไฟล์และโครงสร้างที่ไม่ได้ใช้งาน
+
+**Prompt:** clean project และอัปเดต README, AI_JOURNAL, DECISIONS ให้ตรงกับระบบแล้ว push
+
+**AI Response:** ตรวจ inventory ของ project ด้วย `git status`, `rg --files`, `find`, และ search import references พบว่า `src/components/ui` กับ `src/components/layout` เป็นโฟลเดอร์ว่างที่ไม่ได้อยู่ใน git, build/test outputs เช่น `.next`, `.next-stale-typography-build-cache`, `playwright-report`, `test-results` ลบได้ และ dependency `lucide-react` ไม่ถูก import เพราะระบบใช้ MUI icons แล้ว จึงลบ dependency ออกจาก `package.json`/`package-lock.json`
+
+**My Adjustment:** ผู้ใช้ต้องการ cleanup แบบปลอดภัย จึงไม่ลบ runtime data ใน `data/`, ไม่ลบ migrations, scripts, Docker compose variants หรือเอกสาร assignment และจะตรวจ lint/test/build ก่อน push เพื่อยืนยันว่า dependency cleanup ไม่ทำให้ระบบพัง
