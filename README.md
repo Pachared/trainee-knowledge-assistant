@@ -5,7 +5,7 @@ Trainee Knowledge Assistant คือ web application สำหรับอั�
 ## Tech Stack
 
 - Framework: Next.js 16 + TypeScript + React 19
-- UI: MUI ทั้งระบบ พร้อม responsive layout สำหรับ desktop, tablet และ mobile
+- UI: MUI ทั้งระบบ พร้อม theme กลาง, logo, responsive layout สำหรับ desktop, tablet และ mobile
 - API: Next.js API Routes / App Router route handlers
 - Auth: mock user จาก env, bcrypt, JWT session cookie และ protected routes
 - Database: SQLite ผ่าน Prisma ORM และ Prisma migrations
@@ -104,6 +104,11 @@ npm run test:docker:rag
 - [x] Rate limit ผ่าน Redis พร้อม SQLite fallback และ storage quota ต่อ user
 - [x] Docker Compose + healthcheck สำหรับ web, worker, Chroma และ Redis
 - [x] Integration tests และ e2e tests
+- [x] UX/UI ภาษาไทยทั้งระบบด้วย MUI theme สีขาว modern
+- [x] Logo ของระบบในหน้า login, sidebar และ top bar
+- [x] Mobile drawer/menu ใช้งานจริง ไม่ใช่ UI placeholder
+- [x] Chat auto-scroll ระหว่างถามและตอน AI กำลังตอบ
+- [x] Upload polling แสดงสถานะเอกสารที่กำลังประมวลผล
 
 ## Architecture
 
@@ -125,6 +130,7 @@ Browser / MUI UI
 
 - `src/app`: pages และ API route handlers
 - `src/components`: UI components แยกตาม feature เช่น chat, upload, sidebar และ summary shortcut
+- `src/theme`: MUI theme, palette, typography และ component defaults
 - `src/lib/auth`: login, session, current user
 - `src/lib/documents`: upload, file storage, PDF/TXT extraction, document lifecycle, job lock/retry
 - `src/lib/rag`: chunk retrieval, fallback search, summary cache helpers, Chroma client, embeddings
@@ -139,6 +145,22 @@ Browser / MUI UI
 
 ## Main Flow
 
+### 0. UX/UI
+
+หน้าจอหลักใช้ MUI theme กลางด้วย palette:
+
+```text
+Primary: #14B8A6
+Background: #F9FAFB
+Surface: #FFFFFF
+Text: #1F2937
+Accent: #84CC16
+```
+
+ระบบมี logo ชื่อ Knowledge AI แสดงใน login, sidebar และ top bar เพื่อให้ผู้ใช้รู้ชัดว่าอยู่ในระบบเดียวกัน copy บนหน้าจอถูกปรับเป็นภาษาไทยที่อ่านง่าย ลดคำอธิบายเชิงเทคนิคที่ไม่จำเป็น และเพิ่ม spacing ระหว่างส่วนสำคัญเพื่อให้กดใช้งานง่ายขึ้น
+
+บน desktop มี sidebar สำหรับแชทใหม่, ค้นหาแชท, ประวัติแชท และเมนูหลัก ส่วน mobile ใช้ drawer และเมนู “เพิ่มเติม” ที่เปิดเป็น MUI menu จริงเพื่อไปหน้าอัปโหลด, การใช้งานโทเคน และตรวจสถานะระบบได้
+
 ### 1. Login
 
 ผู้ใช้กรอก username/password ที่เก็บใน env ระบบ seed user ลง SQLite และตรวจ password ด้วย bcrypt เมื่อ login สำเร็จ API จะตั้ง session cookie ชื่อ `trainee_knowledge_session`
@@ -146,6 +168,8 @@ Browser / MUI UI
 ### 2. Upload Document
 
 ผู้ใช้อัปโหลด PDF/TXT ผ่านหน้า upload ระบบจะ validate type/size, sanitize filename, save file ลง upload directory แล้วสร้าง record เอกสารใน SQLite ด้วยสถานะ `queued` เพื่อให้ request ตอบกลับเร็วขึ้น
+
+หลัง upload สำเร็จ UI จะบอกว่าระบบกำลังประมวลผลเอกสาร และหน้าแอปจะ polling สถานะเอกสารที่ยังเป็น `queued` หรือ `processing` ทุก 3 วินาที จนเอกสารเปลี่ยนเป็น `ready`, `ready_without_chroma` หรือ `failed`
 
 ### 3. Background Document Worker
 
@@ -158,6 +182,8 @@ worker จะ claim งานจากเอกสารสถานะ `queued`
 ### 5. Chat
 
 เมื่อผู้ใช้ถามคำถาม ระบบจะสร้างหรือใช้ chat session เดิม แล้วดึง context จาก Chroma จากนั้นส่ง prompt เข้า OpenAI และ stream คำตอบกลับมาที่ UI
+
+ฝั่ง UI จะเลื่อน chat ลงล่างอัตโนมัติเมื่อมีข้อความใหม่หรือระหว่าง AI กำลัง stream คำตอบ เพื่อให้ผู้ใช้ไม่ต้องเลื่อนเองหลังส่งคำถาม
 
 ### 6. Summarize Whole Document
 
@@ -231,6 +257,7 @@ curl http://localhost:3000/api/admin/diagnostics
 ## Known Issues
 
 - Auth ยังเป็น mock user เดียว ยังไม่มีระบบ user management จริง
+- UX/UI ถูกปรับให้ใช้งานจริงมากขึ้นแล้ว แต่ยังควรเพิ่ม usability test กับผู้ใช้จริงเพื่อดูว่าขั้นตอน upload -> เลือกเอกสาร -> สรุปเอกสาร เข้าใจง่ายพอหรือไม่
 - Worker เป็น background polling worker พร้อม lock/retry แล้ว แต่ถ้าปริมาณงานสูงมากควรใช้ queue จริง เช่น BullMQ/Redis streams พร้อม dead-letter queue
 - Rate limit ใช้ Redis เมื่อกำหนด `RATE_LIMIT_REDIS_URL` และ fallback เป็น SQLite แต่ production หลาย instance ควรบังคับ Redis ให้พร้อมใช้งานเสมอ
 - การสรุปทั้งเอกสารครอบคลุมทุก chunk ผ่าน summary cache และ context fitting แล้ว แต่เอกสารใหญ่มากยังควรเพิ่ม map-reduce summarization แบบหลายชั้นเพื่อสรุประดับ section/chapter ให้ละเอียดขึ้นโดยไม่ชน context limit

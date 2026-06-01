@@ -21,6 +21,7 @@ import AddCommentOutlinedIcon from "@mui/icons-material/AddCommentOutlined";
 import CloseFullscreenOutlinedIcon from "@mui/icons-material/CloseFullscreenOutlined";
 import MoreHorizOutlinedIcon from "@mui/icons-material/MoreHorizOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
+import { AppLogo } from "@/components/app/app-logo";
 import type { ApiChat } from "@/components/app/types";
 
 type SidebarProps = {
@@ -111,22 +112,22 @@ export function Sidebar({
         flexDirection: "column",
         minWidth: 0,
         height: "100%",
-        bgcolor: { xs: "background.paper", md: "#f7f7f8" },
+        bgcolor: { xs: "background.paper", md: "#F3F7F6" },
         borderRight: 1,
         borderColor: "divider",
-        p: 1.5
+        p: 2
       }}
     >
-      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", minHeight: 44, px: 1, pb: 1.75 }}>
-        <Typography variant="h6" component="div" lang="en">
-          Knowledge AI
-        </Typography>
-        <IconButton type="button" onClick={onClose} aria-label="ปิด sidebar" size="small">
-          <CloseFullscreenOutlinedIcon fontSize="small" />
-        </IconButton>
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", minHeight: 48, pb: 2 }}>
+        <AppLogo />
+        {onClose ? (
+          <IconButton type="button" onClick={onClose} aria-label="ปิด sidebar" size="small">
+            <CloseFullscreenOutlinedIcon fontSize="small" />
+          </IconButton>
+        ) : null}
       </Stack>
 
-      <Stack spacing={1}>
+      <Stack spacing={1.25}>
         <Button
           type="button"
           onClick={onNewChat}
@@ -135,11 +136,11 @@ export function Sidebar({
           startIcon={<AddCommentOutlinedIcon />}
           sx={{
             justifyContent: "flex-start",
-            minHeight: 42,
+            minHeight: 44,
             px: 1.5,
-            color: "text.primary",
-            bgcolor: "#e9eaed",
-            "&:hover": { bgcolor: "#e1e2e6" }
+            color: "primary.contrastText",
+            bgcolor: "primary.main",
+            "&:hover": { bgcolor: "primary.dark" }
           }}
         >
           แชทใหม่
@@ -163,8 +164,8 @@ export function Sidebar({
         />
       </Stack>
 
-      <Box component="section" aria-label="ประวัติแชท" sx={{ minHeight: 0, mt: 3 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: 1.25, mb: 1, fontWeight: 900 }}>
+      <Box component="section" aria-label="ประวัติแชท" sx={{ minHeight: 0, mt: 3.25 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: 0.5, mb: 1.25, fontWeight: 900 }}>
           ประวัติแชท
         </Typography>
         <List
@@ -172,7 +173,7 @@ export function Sidebar({
           disablePadding
           sx={{
             display: "grid",
-            gap: 0.75,
+            gap: 1,
             maxHeight: "calc(100dvh - 292px)",
             overflowY: "auto"
           }}
@@ -185,13 +186,14 @@ export function Sidebar({
                 onClick={() => onSelectChat(chat.id)}
                 sx={{
                   minHeight: 42,
-                  borderRadius: 1,
-                  px: 1.25,
+                  borderRadius: 1.5,
+                  px: 1.5,
                   "&.Mui-selected": {
-                    bgcolor: "#e9eaed"
+                    bgcolor: "rgba(20, 184, 166, 0.14)",
+                    color: "text.primary"
                   },
                   "&.Mui-selected:hover, &:hover": {
-                    bgcolor: "#e1e2e6"
+                    bgcolor: "rgba(20, 184, 166, 0.18)"
                   }
                 }}
               >
@@ -211,22 +213,22 @@ export function Sidebar({
             ))
           ) : (
             <Typography variant="body2" color="text.secondary" sx={{ px: 1.25 }}>
-              ยังไม่มีประวัติแชท
+              ยังไม่มีแชท เริ่มถามคำถามแรกได้เลย
             </Typography>
           )}
         </List>
       </Box>
 
-      <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", mt: "auto", px: 1, pt: 2, pb: 0.5 }}>
-        <Avatar sx={{ width: 34, height: 34, bgcolor: "#111318", color: "#fff", fontWeight: 900 }}>
+      <Stack direction="row" spacing={1.25} sx={{ alignItems: "center", mt: "auto", px: 0.5, pt: 2.5, pb: 0.5 }}>
+        <Avatar sx={{ width: 36, height: 36, bgcolor: "primary.main", color: "primary.contrastText", fontWeight: 900 }}>
           {userName.slice(0, 1).toUpperCase()}
         </Avatar>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="body2" noWrap sx={{ fontWeight: 900 }}>
             {userName}
           </Typography>
-          <Typography variant="caption" color="text.secondary" noWrap lang="en">
-            Mock admin
+          <Typography variant="caption" color="text.secondary" noWrap>
+            ผู้ดูแลระบบ
           </Typography>
         </Box>
       </Stack>

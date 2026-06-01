@@ -110,8 +110,8 @@ test.describe("desktop shell", () => {
     await expect(page.getByText("ประวัติแชท", { exact: true })).toBeVisible();
     await expect(page.getByPlaceholder("ถามอะไรก็ได้")).toBeVisible();
     await expect(page.getByRole("link", { name: "อัปโหลด" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Token usage" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Diagnostics" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "โทเคน" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "ตรวจระบบ" })).toBeVisible();
   });
 });
 
@@ -122,13 +122,13 @@ test.describe("admin diagnostics", () => {
     await login(page);
     await page.goto("/admin");
 
-    await expect(page.getByRole("heading", { name: "Admin diagnostics" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ตรวจสถานะระบบ" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "OpenAI" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Chroma" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Redis rate limit" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Database" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Operational metrics" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Upload directory" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ฐานข้อมูล" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ภาพรวมการทำงาน" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "โฟลเดอร์อัปโหลด" })).toBeVisible();
   });
 });
 
@@ -199,7 +199,7 @@ test.describe("document summary shortcut", () => {
     let chatPayload: { message?: string; documentId?: string } | undefined;
 
     await page.goto("/chat");
-    await expect(page.getByText("เลือกเอกสารก่อนสรุป")).toBeVisible();
+    await expect(page.getByText("เลือกเอกสารที่พร้อมใช้งานก่อนสรุป")).toBeVisible();
     await expect(page.getByRole("button", { name: "สรุปเอกสาร" })).toBeDisabled();
 
     await page.getByLabel("เลือกเอกสารสำหรับ RAG").click();

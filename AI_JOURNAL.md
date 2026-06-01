@@ -193,3 +193,11 @@
 **AI Response:** ตรวจพบว่าปุ่มเดิมส่ง quick prompt เฉย ๆ โดยไม่ส่ง `documentId` ทำให้ backend ไม่เข้าโหมด `retrieveWholeDocumentContext` และอาจกลายเป็น RAG top-k ปกติ จึงเพิ่ม `summary-action.ts`, เปลี่ยนปุ่มให้ disable จนกว่าจะเลือกเอกสาร, ส่ง prompt กลางแบบสรุปทั้งเอกสารพร้อม `documentId`, และเพิ่ม Playwright e2e test สำหรับ flow นี้
 
 **My Adjustment:** ผู้ใช้ต้องการให้ปุ่มทำงานตรงกับความคาดหวัง ไม่ใช่แค่ข้อความลัด จึงตรวจด้วย unit test, lint และ build ส่วน e2e browser test ถูกเพิ่มไว้แล้วแต่การรันจริงล่าสุดติด sandbox/approval limit ของเครื่องมือ
+
+## Session 25: ปรับ UX/UI ใหม่ทั้งระบบ
+
+**Prompt:** ปรับแต่ง UX UI ใหม่ทั้งหมด โดยเอาคำอธิบายที่ไม่จำเป็นออก ทำข้อความภาษาไทยให้อ่านง่าย ทำ UI ที่เป็น placeholder ให้ใช้งานจริง เพิ่ม gap/spacing, เพิ่ม logo, ทำ chat auto-scroll และใช้ palette `#14B8A6`, `#F9FAFB`, `#FFFFFF`, `#1F2937`, `#84CC16`
+
+**AI Response:** ปรับ MUI theme กลางให้ใช้ palette ใหม่, เพิ่ม `AppLogo` แล้วนำไปใช้ที่ login/sidebar/top bar, ปรับ copy หน้า login/chat/upload/usage/admin เป็นภาษาไทยที่สั้นและเข้าใจง่าย, เพิ่ม spacing ใน layout หลัก, ทำเมนู mobile “เพิ่มเติม” ให้เปิด MUI menu จริง, ปรับปุ่มอัปโหลดให้เลือกไฟล์เดิมซ้ำได้, เพิ่ม upload polling สำหรับเอกสารที่ยังประมวลผล, ปรับปุ่มสรุปเอกสารให้มี tooltip/สถานะ disabled ที่ชัดเจน และเพิ่ม auto-scroll ใน chat เมื่อมีข้อความใหม่หรือ AI กำลัง stream
+
+**My Adjustment:** ผู้ใช้ต้องการ UX ที่ใช้งานง่ายที่สุดและลดส่วนที่เป็นแค่หน้าตา จึงตรวจทั้งระบบในมุมผู้ใช้จริงว่าเมนูไปหน้าได้, ปุ่มที่แสดงบน UI มี behavior, ข้อความไม่เทคนิคเกินไป และเอกสาร README/AI_JOURNAL/DECISIONS ต้องสะท้อนระบบ UX ล่าสุดก่อน push

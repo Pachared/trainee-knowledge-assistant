@@ -10,6 +10,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import LoginOutlinedIcon from "@mui/icons-material/LoginOutlined";
+import { AppLogo } from "@/components/app/app-logo";
 
 export function LoginForm() {
   const router = useRouter();
@@ -57,17 +58,20 @@ export function LoginForm() {
     >
       <Stack spacing={2.25}>
         <Box>
+          <Box sx={{ mb: 2 }}>
+            <AppLogo />
+          </Box>
           <Typography variant="h3" component="h1" sx={{ mb: 1 }}>
-            เข้าสู่ Trainee Knowledge Assistant
+            เข้าสู่ระบบ
           </Typography>
           <Typography color="text.secondary" variant="body2">
-            ใช้บัญชี mock จากไฟล์ env เพื่อทดสอบระบบ login และ protected routes
+            ใช้บัญชีที่กำหนดไว้ใน env เพื่อเข้าใช้งานแชทและจัดการเอกสาร
           </Typography>
         </Box>
 
         <TextField
           id="username"
-          label="USERNAME"
+          label="ชื่อผู้ใช้"
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
@@ -77,7 +81,7 @@ export function LoginForm() {
 
         <TextField
           id="password"
-          label="PASSWORD"
+          label="รหัสผ่าน"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}

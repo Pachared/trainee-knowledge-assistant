@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import FormControl from "@mui/material/FormControl";
@@ -10,6 +10,7 @@ import Paper from "@mui/material/Paper";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import TextareaAutosize from "@mui/material/TextareaAutosize";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import ArrowUpwardOutlinedIcon from "@mui/icons-material/ArrowUpwardOutlined";
 import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
@@ -30,7 +31,12 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
   const [documentId, setDocumentId] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const canSummarize = canSummarizeDocument(documentId);
+  const readyDocuments = useMemo(
+    () => documents.filter((document) => ["ready", "ready_without_chroma"].includes(document.status) && (document._count?.chunks ?? 0) > 0),
+    [documents]
+  );
+  const selectedDocumentId = documents.some((document) => document.id === documentId) ? documentId : "";
+  const canSummarize = canSummarizeDocument(selectedDocumentId) && readyDocuments.some((document) => document.id === selectedDocumentId);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,7 +45,7 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
       return;
     }
 
-    onSend(message, documentId || undefined);
+    onSend(message, selectedDocumentId || undefined);
     setMessage("");
   }
 
@@ -64,10 +70,10 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
           mx: "auto",
           border: 1,
           borderColor: "divider",
-          borderRadius: 3.5,
-          bgcolor: "#f4f4f5",
-          boxShadow: "0 10px 32px rgba(17, 19, 24, 0.08)",
-          p: 1.25
+          borderRadius: 3,
+          bgcolor: "background.paper",
+          boxShadow: "0 14px 36px rgba(31, 41, 55, 0.08)",
+          p: 1.5
         }}
       >
         <Box sx={{ display: "grid", gridTemplateColumns: "42px minmax(0, 1fr) 42px", alignItems: "end", gap: 1 }}>
@@ -123,32 +129,40 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
         <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap", mt: 1, px: { xs: 0.5, md: 6 } }}>
           <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 220 } }}>
             <Select
-              value={documentId}
+              value={selectedDocumentId}
               onChange={(event) => setDocumentId(event.target.value)}
               displayEmpty
               aria-label="เลือกเอกสารสำหรับ RAG"
               sx={{ bgcolor: "background.paper", borderRadius: 999 }}
             >
-              <MenuItem value="">ใช้เอกสารทั้งหมด</MenuItem>
+              <MenuItem value="">ถามจากทุกเอกสาร</MenuItem>
               {documents.map((document) => (
-                <MenuItem key={document.id} value={document.id}>
-                  {document.title}
+                <MenuItem
+                  key={document.id}
+                  value={document.id}
+                  disabled={!["ready", "ready_without_chroma"].includes(document.status) || !(document._count?.chunks ?? 0)}
+                >
+                  {document.title} {document.status === "queued" || document.status === "processing" ? "(กำลังประมวลผล)" : ""}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
-          <Button
-            type="button"
-            variant="outlined"
-            startIcon={<AutoAwesomeOutlinedIcon />}
-            disabled={disabled || !canSummarize}
-            onClick={() => onPrompt(DOCUMENT_SUMMARY_PROMPT, documentId)}
-            sx={{ borderRadius: 999, bgcolor: "background.paper" }}
-          >
-            สรุปเอกสาร
-          </Button>
+          <Tooltip title={canSummarize ? "สรุปเอกสารที่เลือก" : "เลือกเอกสารที่ประมวลผลแล้วก่อนสรุป"}>
+            <span>
+              <Button
+                type="button"
+                variant="outlined"
+                startIcon={<AutoAwesomeOutlinedIcon />}
+                disabled={disabled || !canSummarize}
+                onClick={() => onPrompt(DOCUMENT_SUMMARY_PROMPT, selectedDocumentId)}
+                sx={{ borderRadius: 999, bgcolor: "background.paper" }}
+              >
+                สรุปเอกสาร
+              </Button>
+            </span>
+          </Tooltip>
           <Typography variant="caption" color="text.secondary">
-            {uploading ? "กำลังอัปโหลด..." : canSummarize ? "พร้อมสรุปเอกสารที่เลือก" : "เลือกเอกสารก่อนสรุป"}
+            {uploading ? "กำลังอัปโหลด..." : canSummarize ? "พร้อมสรุปเอกสารที่เลือก" : "เลือกเอกสารที่พร้อมใช้งานก่อนสรุป"}
           </Typography>
         </Stack>
         <input
@@ -156,7 +170,10 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
           type="file"
           accept=".pdf,.txt,application/pdf,text/plain"
           hidden
-          onChange={(event) => handleFile(event.target.files?.[0])}
+          onChange={(event) => {
+            void handleFile(event.target.files?.[0]);
+            event.currentTarget.value = "";
+          }}
         />
       </Paper>
     </Box>

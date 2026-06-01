@@ -18,6 +18,34 @@ import DriveFolderUploadOutlinedIcon from "@mui/icons-material/DriveFolderUpload
 import SyncOutlinedIcon from "@mui/icons-material/SyncOutlined";
 import type { ApiDocument } from "@/components/app/types";
 
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    queued: "รอประมวลผล",
+    processing: "กำลังประมวลผล",
+    ready: "พร้อมใช้งาน",
+    ready_without_chroma: "พร้อมใช้แบบสำรอง",
+    failed: "ไม่สำเร็จ"
+  };
+
+  return labels[status] || status;
+}
+
+function statusColor(status: string): "default" | "primary" | "success" | "warning" | "error" {
+  if (status === "ready") {
+    return "success";
+  }
+
+  if (status === "ready_without_chroma" || status === "queued" || status === "processing") {
+    return "warning";
+  }
+
+  if (status === "failed") {
+    return "error";
+  }
+
+  return "default";
+}
+
 type UploadViewProps = {
   documents: ApiDocument[];
   status?: string;
@@ -95,8 +123,8 @@ export function UploadView({
           <Typography variant="h2" component="h2" sx={{ mb: 1 }}>
             อัปโหลดเอกสาร
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            ระบบจะแยก text, chunk, ฝัง embedding และส่งเข้า Chroma สำหรับถามตอบจาก context
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3.5 }}>
+            เพิ่มไฟล์ PDF/TXT เพื่อให้ระบบนำไปใช้ค้นหา อ้างอิง และสรุปเอกสารในหน้าแชท
           </Typography>
           {status ? (
             <Alert severity={status.includes("ไม่สำเร็จ") || status.includes("failed") ? "warning" : "info"} sx={{ mb: 2 }}>
@@ -104,7 +132,7 @@ export function UploadView({
             </Alert>
           ) : null}
 
-          <Paper elevation={0} sx={{ display: "grid", gap: 2, border: 1, borderColor: "divider", p: 3 }}>
+          <Paper elevation={0} sx={{ display: "grid", gap: 2.25, border: 1, borderColor: "divider", p: { xs: 2.25, md: 3 } }}>
             <Button
               variant="contained"
               startIcon={<DriveFolderUploadOutlinedIcon />}
@@ -116,14 +144,17 @@ export function UploadView({
               {uploading ? "กำลังประมวลผลไฟล์" : "เลือกไฟล์ PDF/TXT"}
             </Button>
             <Typography variant="caption" color="text.secondary">
-              validate type/size และ sanitize path ก่อนบันทึกลง `data/uploads`
+              รองรับ PDF และ TXT ขนาดไม่เกินค่าที่กำหนดในระบบ ชื่อไฟล์จะถูกปรับให้ปลอดภัยก่อนบันทึก
             </Typography>
             <input
               ref={inputRef}
               hidden
               type="file"
               accept=".pdf,.txt,application/pdf,text/plain"
-              onChange={(event) => handleFile(event.target.files?.[0])}
+              onChange={(event) => {
+                void handleFile(event.target.files?.[0]);
+                event.currentTarget.value = "";
+              }}
             />
           </Paper>
 
@@ -138,7 +169,7 @@ export function UploadView({
               disabled={!pendingReindexCount || bulkReindexing}
               onClick={() => void handleReindexAll()}
             >
-              {bulkReindexing ? "กำลัง re-index" : `Re-index ทั้งหมด (${pendingReindexCount})`}
+              {bulkReindexing ? "กำลังสร้างดัชนีใหม่" : `สร้างดัชนีใหม่ (${pendingReindexCount})`}
             </Button>
           </Stack>
           <Stack spacing={1.25}>
@@ -176,7 +207,7 @@ export function UploadView({
                     ) : null}
                   </Box>
                   <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", justifyContent: { xs: "flex-start", sm: "flex-end" } }}>
-                    <Chip size="small" label={document.status} />
+                    <Chip size="small" label={statusLabel(document.status)} color={statusColor(document.status)} variant="outlined" />
                     <IconButton
                       type="button"
                       aria-label={`re-index Chroma ${document.title}`}
@@ -210,9 +241,9 @@ export function UploadView({
 
       <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} fullWidth maxWidth="xs">
         <DialogTitle>ลบเอกสาร</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            {`ต้องการลบเอกสาร "${deleteTarget?.title ?? ""}" พร้อม chunks และข้อมูลใน Chroma หรือไม่?`}
+            {`ต้องการลบ "${deleteTarget?.title ?? ""}" ออกจากระบบหรือไม่? ข้อมูล chunks และดัชนีที่เกี่ยวข้องจะถูกลบด้วย`}
           </Typography>
         </DialogContent>
         <DialogActions>

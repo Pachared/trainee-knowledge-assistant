@@ -16,7 +16,7 @@ type MessageListProps = {
 
 export function MessageList({ messages, streaming }: MessageListProps) {
   return (
-    <Stack sx={{ width: "min(100%, 920px)", mx: "auto" }}>
+    <Stack sx={{ width: "min(100%, 920px)", mx: "auto", gap: 3 }}>
       {messages.map((message) => {
         const isUser = message.role === "user";
 
@@ -26,29 +26,29 @@ export function MessageList({ messages, streaming }: MessageListProps) {
             component="article"
             spacing={1}
             sx={{
-              my: 2.75,
               alignItems: isUser ? "flex-end" : "flex-start"
             }}
           >
             <Box
               sx={{
-                maxWidth: isUser ? "min(720px, 88%)" : "min(100%, 760px)",
-                borderRadius: isUser ? 999 : 0,
-                bgcolor: isUser ? "primary.main" : "transparent",
+                maxWidth: isUser ? "min(720px, 88%)" : "min(100%, 800px)",
+                borderRadius: isUser ? 3 : 2.5,
+                bgcolor: isUser ? "primary.main" : "background.paper",
                 color: isUser ? "primary.contrastText" : "text.primary",
-                px: isUser ? 2 : 0,
-                py: isUser ? 1.35 : 0,
+                border: isUser ? 0 : 1,
+                borderColor: "divider",
+                px: isUser ? 2 : 2.25,
+                py: isUser ? 1.35 : 1.75,
                 typography: "body1",
-                overflowWrap: "anywhere"
+                overflowWrap: "anywhere",
+                boxShadow: isUser ? "none" : "0 8px 24px rgba(31, 41, 55, 0.05)"
               }}
             >
               {isUser ? (
                 message.content
               ) : (
                 <Box className="markdown-body">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content || (streaming ? "กำลังคิด..." : "")}
-                  </ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content || (streaming ? "กำลังร่างคำตอบ..." : "")}</ReactMarkdown>
                 </Box>
               )}
             </Box>

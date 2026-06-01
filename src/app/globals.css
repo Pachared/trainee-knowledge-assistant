@@ -6,6 +6,11 @@
   --font-latin-stack: var(--font-latin), Arial, sans-serif;
   --font-script-stack: var(--font-latin), var(--font-thai), Arial, sans-serif;
   --font-sans: var(--font-script-stack);
+  --color-primary: #14b8a6;
+  --color-background: #f9fafb;
+  --color-surface: #ffffff;
+  --color-text: #1f2937;
+  --color-accent: #84cc16;
 }
 
 * {
@@ -19,6 +24,8 @@ body {
   letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  color: var(--color-text);
+  background: var(--color-background);
 }
 
 :lang(th) {
@@ -45,9 +52,9 @@ body {
 
 .markdown-body pre {
   overflow-x: auto;
-  border: 1px solid #dedfe3;
-  border-radius: 16px;
-  background: #f5f6f8;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #f9fafb;
   padding: 16px;
   font-size: 15px;
   line-height: 1.55;

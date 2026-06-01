@@ -1,5 +1,15 @@
 import { createTheme } from "@mui/material/styles";
 
+declare module "@mui/material/styles" {
+  interface Palette {
+    accent: Palette["primary"];
+  }
+
+  interface PaletteOptions {
+    accent?: PaletteOptions["primary"];
+  }
+}
+
 const fontFamily = "var(--font-sans)";
 
 function responsiveType({
@@ -37,22 +47,31 @@ export const appTheme = createTheme({
   palette: {
     mode: "light",
     background: {
-      default: "#ffffff",
-      paper: "#ffffff"
+      default: "#F9FAFB",
+      paper: "#FFFFFF"
     },
     text: {
-      primary: "#111318",
-      secondary: "#686d76"
+      primary: "#1F2937",
+      secondary: "#64748B"
     },
     primary: {
-      main: "#0a84ff",
-      dark: "#0057d9",
+      main: "#14B8A6",
+      dark: "#0F766E",
       contrastText: "#ffffff"
     },
-    divider: "#dedfe3"
+    secondary: {
+      main: "#84CC16",
+      dark: "#4D7C0F",
+      contrastText: "#1F2937"
+    },
+    accent: {
+      main: "#84CC16",
+      contrastText: "#1F2937"
+    },
+    divider: "#E5E7EB"
   },
   shape: {
-    borderRadius: 8
+    borderRadius: 10
   },
   typography: {
     fontFamily,
@@ -97,7 +116,9 @@ export const appTheme = createTheme({
           overflow: "hidden",
           fontFamily,
           fontSize: "16px",
-          lineHeight: 1.5
+          lineHeight: 1.5,
+          color: "#1F2937",
+          backgroundColor: "#F9FAFB"
         },
         a: {
           color: "inherit",
@@ -112,15 +133,16 @@ export const appTheme = createTheme({
       styleOverrides: {
         root: {
           minHeight: 40,
-          borderRadius: 8,
-          letterSpacing: 0
+          borderRadius: 10,
+          letterSpacing: 0,
+          boxShadow: "none"
         }
       }
     },
     MuiIconButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8
+          borderRadius: 10
         }
       }
     },
@@ -133,7 +155,7 @@ export const appTheme = createTheme({
       styleOverrides: {
         root: {
           backgroundColor: "#ffffff",
-          borderRadius: 8
+          borderRadius: 10
         },
         input: {
           fontSize: "1rem",
@@ -156,7 +178,7 @@ export const appTheme = createTheme({
     MuiPaper: {
       styleOverrides: {
         rounded: {
-          borderRadius: 16
+          borderRadius: 14
         }
       }
     },

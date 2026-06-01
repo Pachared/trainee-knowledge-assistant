@@ -168,6 +168,26 @@ Docker Compose local ยังขึ้นกับ Docker Desktop state แล�
 
 ข้อดีคือสรุปตรงเอกสารที่ผู้ใช้เลือกและลดความกำกวม ข้อเสียคือผู้ใช้ต้องเลือกเอกสารก่อนหนึ่งขั้น ถ้าต้องการ UX ที่เร็วขึ้นในอนาคตสามารถเพิ่ม default selection เป็นเอกสาร ready ล่าสุดได้ แต่ควรแสดงให้ชัดว่าระบบเลือกไฟล์ไหนเพื่อไม่ให้เกิดการสรุปผิดเอกสาร
 
+## Decision 12: ใช้ MUI theme กลาง + palette ใหม่ + logo เพื่อให้ UX สม่ำเสมอ
+
+### Context
+
+หลังระบบ backend และ RAG ใช้งานได้มากขึ้น ผู้ใช้พบว่า UI ยังมีบางจุดที่เป็นแค่หน้าตา, ข้อความบางส่วนยังเทคนิคเกินไป, spacing บางจุดชิดกัน และระบบยังไม่มี logo ทำให้ประสบการณ์ใช้งานไม่รู้สึกเป็น product เดียวกัน นอกจากนี้ยังต้องใช้ palette ใหม่ที่กำหนดชัดเจนคือ primary teal, background เทาอ่อน, surface ขาว, text เทาเข้ม และ accent เขียว
+
+### Alternatives Considered
+
+ทางเลือกแรกคือแก้ CSS เฉพาะจุดในแต่ละ component ซึ่งเร็วแต่จะทำให้สี ระยะห่าง และ typography กระจายอยู่หลายไฟล์ อีกทางเลือกคือทำ design system แยกเต็มรูปแบบ ซึ่งใหญ่เกิน project นี้ ทางเลือกที่เหมาะกว่าคือใช้ MUI theme กลางเป็น source of truth แล้วใช้ CSS เฉพาะส่วนที่ MUI theme คุมไม่ได้ เช่น global body, markdown content และ scrollbar
+
+### Why MUI theme + focused CSS
+
+เลือกปรับผ่าน MUI theme เพราะ project ใช้ MUI ทั้งระบบอยู่แล้ว จึงควบคุม palette, typography, button, paper, card, chip และ input ได้จากที่เดียว สีหลักถูกตั้งเป็น `#14B8A6`, background เป็น `#F9FAFB`, surface เป็น `#FFFFFF`, text เป็น `#1F2937` และ accent เป็น `#84CC16` ส่วน logo ถูกทำเป็น component เดียวแล้ว reuse ใน login, sidebar และ top bar เพื่อให้ identity ของระบบชัดเจน
+
+ในเชิง UX จึงปรับเมนู mobile ให้เป็น action จริง, ลดคำอธิบายที่ไม่จำเป็น, เปลี่ยนข้อความเป็นภาษาไทยที่ผู้ใช้เข้าใจง่าย, เพิ่ม spacing ระหว่างส่วนสำคัญ, ทำ chat auto-scroll และปรับ upload/composer ให้แสดงสถานะเอกสารพร้อมใช้งานชัดเจนกว่าเดิม
+
+### Trade-offs
+
+ข้อดีคือ UI สม่ำเสมอและต่อยอดง่ายขึ้น เพราะ component ใหม่สามารถใช้ theme เดิมได้ทันที ข้อเสียคือ MUI theme ยังไม่ครอบทุก edge case เช่น markdown จาก AI และ layout เฉพาะจุด จึงยังต้องมี global CSS บางส่วน อีกจุดคือ logo ปัจจุบันเป็น CSS-based mark ไม่ใช่ไฟล์ brand asset ถ้าระบบใช้จริงในองค์กรควรออกแบบ brand guideline และ export logo เป็น SVG/PNG อย่างเป็นทางการ
+
 ## Decision 9: ใช้ Redis rate limit พร้อม SQLite fallback
 
 ### Context

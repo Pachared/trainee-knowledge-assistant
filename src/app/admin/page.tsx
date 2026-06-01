@@ -25,17 +25,17 @@ type DiagnosticCardProps = {
 
 const statusConfig = {
   ok: {
-    label: "OK",
+    label: "ปกติ",
     color: "success" as const,
     icon: <CheckCircleOutlineOutlinedIcon fontSize="small" />
   },
   warning: {
-    label: "Warning",
+    label: "ควรตรวจสอบ",
     color: "warning" as const,
     icon: <ReportProblemOutlinedIcon fontSize="small" />
   },
   error: {
-    label: "Error",
+    label: "ผิดปกติ",
     color: "error" as const,
     icon: <ErrorOutlineOutlinedIcon fontSize="small" />
   }
@@ -43,7 +43,7 @@ const statusConfig = {
 
 function formatValue(value: DiagnosticCardProps["rows"][number]["value"]) {
   if (typeof value === "boolean") {
-    return value ? "Yes" : "No";
+    return value ? "ใช่" : "ไม่ใช่";
   }
 
   if (value === null || value === undefined || value === "") {
@@ -69,7 +69,7 @@ function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
     >
       <Stack spacing={2}>
         <Stack direction="row" spacing={2} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-          <Typography variant="h6" component="h2" sx={{ fontWeight: 900 }} lang="en">
+          <Typography variant="h6" component="h2" sx={{ fontWeight: 900 }}>
             {title}
           </Typography>
           <Chip icon={config.icon} label={config.label} color={config.color} size="small" variant="outlined" />
@@ -80,12 +80,11 @@ function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
         <Stack spacing={1.25}>
           {rows.map((row) => (
             <Stack key={row.label} direction="row" spacing={2} sx={{ justifyContent: "space-between" }}>
-              <Typography variant="body2" color="text.secondary" lang="en">
+              <Typography variant="body2" color="text.secondary">
                 {row.label}
               </Typography>
               <Typography
                 variant="body2"
-                lang="en"
                 sx={{
                   fontWeight: 700,
                   textAlign: "right",
@@ -128,11 +127,11 @@ export default async function AdminPage() {
         <Stack spacing={3}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ justifyContent: "space-between" }}>
             <Box>
-              <Typography variant="h1" component="h1" sx={{ fontWeight: 900 }} lang="en">
-                Admin diagnostics
+              <Typography variant="h1" component="h1" sx={{ fontWeight: 900 }}>
+                ตรวจสถานะระบบ
               </Typography>
               <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                ตรวจสถานะ OpenAI, Chroma, Database และ upload directory จากระบบจริง
+                ตรวจ OpenAI, Chroma, Redis, ฐานข้อมูล และโฟลเดอร์อัปโหลดจากระบบจริง
               </Typography>
             </Box>
             <Button href="/chat" variant="outlined" startIcon={<ArrowBackOutlinedIcon />}>
@@ -152,11 +151,11 @@ export default async function AdminPage() {
                 title="OpenAI"
                 status={diagnostics.openai.status}
                 rows={[
-                  { label: "API key configured", value: diagnostics.openai.keyConfigured },
-                  { label: "Key count", value: diagnostics.openai.keyCount },
-                  { label: "Chat model", value: diagnostics.openai.model },
-                  { label: "Embedding model", value: diagnostics.openai.embeddingModel },
-                  { label: "Live check", value: diagnostics.openai.liveStatus }
+                  { label: "ตั้งค่า API key แล้ว", value: diagnostics.openai.keyConfigured },
+                  { label: "จำนวน key", value: diagnostics.openai.keyCount },
+                  { label: "โมเดลแชท", value: diagnostics.openai.model },
+                  { label: "โมเดล embedding", value: diagnostics.openai.embeddingModel },
+                  { label: "ผลตรวจ live", value: diagnostics.openai.liveStatus }
                 ]}
                 message={diagnostics.openai.message}
               />
@@ -166,7 +165,7 @@ export default async function AdminPage() {
                 title="Chroma"
                 status={diagnostics.chroma.status}
                 rows={[
-                  { label: "URL", value: diagnostics.chroma.url },
+                  { label: "ที่อยู่", value: diagnostics.chroma.url },
                   { label: "Collection", value: diagnostics.chroma.collection }
                 ]}
                 message={diagnostics.chroma.message}
@@ -177,45 +176,45 @@ export default async function AdminPage() {
                 title="Redis rate limit"
                 status={diagnostics.redis.status}
                 rows={[
-                  { label: "Configured", value: diagnostics.redis.configured },
-                  { label: "URL", value: diagnostics.redis.url }
+                  { label: "ตั้งค่าแล้ว", value: diagnostics.redis.configured },
+                  { label: "ที่อยู่", value: diagnostics.redis.url }
                 ]}
                 message={diagnostics.redis.message}
               />
             </Box>
             <Box>
               <DiagnosticCard
-                title="Database"
+                title="ฐานข้อมูล"
                 status={diagnostics.database.status}
                 rows={[
-                  { label: "Migration files", value: diagnostics.database.migrationCount },
-                  { label: "Applied migrations", value: diagnostics.database.appliedCount }
+                  { label: "ไฟล์ migration", value: diagnostics.database.migrationCount },
+                  { label: "migration ที่ใช้แล้ว", value: diagnostics.database.appliedCount }
                 ]}
                 message={diagnostics.database.message}
               />
             </Box>
             <Box>
               <DiagnosticCard
-                title="Operational metrics"
+                title="ภาพรวมการทำงาน"
                 status={diagnostics.metrics.status}
                 rows={[
-                  { label: "Queued documents", value: diagnostics.metrics.documentsByStatus.queued ?? 0 },
-                  { label: "Processing documents", value: diagnostics.metrics.documentsByStatus.processing ?? 0 },
-                  { label: "Ready documents", value: diagnostics.metrics.documentsByStatus.ready ?? 0 },
-                  { label: "Ready without Chroma", value: diagnostics.metrics.documentsByStatus.ready_without_chroma ?? 0 },
-                  { label: "Failed documents", value: diagnostics.metrics.documentsByStatus.failed ?? 0 },
-                  { label: "Stale processing", value: diagnostics.metrics.staleProcessing },
-                  { label: "Chat sessions", value: diagnostics.metrics.chatSessions },
-                  { label: "Usage records", value: diagnostics.metrics.usageRecords },
-                  { label: "Total tokens", value: diagnostics.metrics.totalTokens }
+                  { label: "เอกสารรอประมวลผล", value: diagnostics.metrics.documentsByStatus.queued ?? 0 },
+                  { label: "เอกสารกำลังประมวลผล", value: diagnostics.metrics.documentsByStatus.processing ?? 0 },
+                  { label: "เอกสารพร้อมใช้งาน", value: diagnostics.metrics.documentsByStatus.ready ?? 0 },
+                  { label: "พร้อมใช้แบบสำรอง", value: diagnostics.metrics.documentsByStatus.ready_without_chroma ?? 0 },
+                  { label: "เอกสารไม่สำเร็จ", value: diagnostics.metrics.documentsByStatus.failed ?? 0 },
+                  { label: "งานค้าง", value: diagnostics.metrics.staleProcessing },
+                  { label: "จำนวนแชท", value: diagnostics.metrics.chatSessions },
+                  { label: "รายการโทเคน", value: diagnostics.metrics.usageRecords },
+                  { label: "โทเคนรวม", value: diagnostics.metrics.totalTokens }
                 ]}
               />
             </Box>
             <Box>
               <DiagnosticCard
-                title="Upload directory"
+                title="โฟลเดอร์อัปโหลด"
                 status={diagnostics.uploadDirectory.status}
-                rows={[{ label: "Path", value: diagnostics.uploadDirectory.path }]}
+                rows={[{ label: "ตำแหน่ง", value: diagnostics.uploadDirectory.path }]}
                 message={diagnostics.uploadDirectory.message}
               />
             </Box>

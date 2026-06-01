@@ -105,6 +105,20 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
     return () => window.clearTimeout(handle);
   }, [loadChats, search]);
 
+  useEffect(() => {
+    const hasActiveDocumentJob = documents.some((document) => ["queued", "processing"].includes(document.status));
+
+    if (!hasActiveDocumentJob) {
+      return;
+    }
+
+    const handle = window.setInterval(() => {
+      void loadDocuments();
+    }, 3000);
+
+    return () => window.clearInterval(handle);
+  }, [documents, loadDocuments]);
+
   async function selectChat(chatId: string) {
     setCurrentChatId(chatId);
     setDrawerOpen(false);
@@ -165,7 +179,7 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
       setStatus(
         data.document.failedReason
           ? `อัปโหลดแล้ว แต่มีข้อควรตรวจสอบ: ${data.document.failedReason}`
-          : "อัปโหลดและ chunk เอกสารเรียบร้อย"
+          : "อัปโหลดแล้ว ระบบกำลังประมวลผลเอกสาร"
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ");
