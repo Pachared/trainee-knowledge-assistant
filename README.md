@@ -91,6 +91,7 @@ npm run test:docker:rag
 - [x] RAG retrieval จาก Chroma
 - [x] SQLite fallback search แบบ ranking หลายคำ เมื่อ Chroma ใช้งานไม่ได้
 - [x] สรุปทั้งเอกสารแบบละเอียดเมื่อผู้ใช้เลือกเอกสารและถามแนว “สรุปทั้งหมด”
+- [x] ปุ่มสรุปเอกสารใน composer ที่บังคับเลือกเอกสารก่อน และส่ง `documentId` เข้า summary flow
 - [x] Citation metadata จาก chunks ที่ใช้ตอบ
 - [x] Markdown rendering ในคำตอบ AI
 - [x] Streaming response ผ่าน Server-Sent Events
@@ -123,7 +124,7 @@ Browser / MUI UI
 โฟลเดอร์สำคัญ:
 
 - `src/app`: pages และ API route handlers
-- `src/components`: UI components แยกตาม feature เช่น chat, upload, sidebar
+- `src/components`: UI components แยกตาม feature เช่น chat, upload, sidebar และ summary shortcut
 - `src/lib/auth`: login, session, current user
 - `src/lib/documents`: upload, file storage, PDF/TXT extraction, document lifecycle, job lock/retry
 - `src/lib/rag`: chunk retrieval, fallback search, summary cache helpers, Chroma client, embeddings
@@ -163,6 +164,10 @@ worker จะ claim งานจากเอกสารสถานะ `queued`
 ถ้าผู้ใช้เลือกเอกสารและถามแนวสรุปทั้งเอกสาร เช่น “ช่วยสรุปเอกสารนี้ทั้งหมด” ระบบจะใช้ summary cache ของเอกสารร่วมกับ chunks ตามลำดับ `chunkIndex` และมี context fitting เพื่อกัน context ใหญ่เกิน model
 
 summary cache เวอร์ชันปัจจุบันจะสร้างจากทุก chunk ของเอกสาร ไม่สุ่มหรือดึงเฉพาะบางช่วงเหมือน RAG top-k ปกติ จากนั้น prompt จะเข้าสู่โหมดสรุปแบบละเอียด โดยกำชับให้ครอบคลุมภาพรวม, ประเด็นสำคัญทั้งหมด, รายละเอียดตามลำดับเอกสาร, ข้อสรุป และข้อจำกัดหรือสิ่งที่ยังไม่ชัดเจน พร้อม citation เมื่อใช้ข้อมูลจาก context
+
+ปุ่ม “สรุปเอกสาร” ใน chat composer จะ disable จนกว่าผู้ใช้จะเลือกเอกสารจาก dropdown ก่อน เมื่อเลือกแล้วปุ่มจะส่ง prompt กลาง `ช่วยสรุปเอกสารนี้ทั้งหมดแบบละเอียด เป็นระบบ และอ่านเข้าใจง่าย` พร้อม `documentId` ของเอกสารที่เลือกเข้า `/api/chat` เพื่อให้ backend ใช้ `retrieveWholeDocumentContext` และ `summaryMode: comprehensive` แทน RAG top-k ปกติ
+
+รูปแบบคำตอบของโหมดนี้ถูกกำหนดให้เป็น Markdown ที่อ่านง่าย ได้แก่ `ภาพรวม`, `ประเด็นสำคัญทั้งหมด`, `รายละเอียดตามลำดับเอกสาร`, `ข้อสรุป` และ `ข้อจำกัดหรือสิ่งที่ยังไม่ชัดเจน` เพื่อป้องกันคำตอบแบบย่อหน้ายาวหรือการ dump chunk ดิบกลับมาให้ผู้ใช้
 
 ### 7. Usage
 
@@ -229,6 +234,7 @@ curl http://localhost:3000/api/admin/diagnostics
 - Worker เป็น background polling worker พร้อม lock/retry แล้ว แต่ถ้าปริมาณงานสูงมากควรใช้ queue จริง เช่น BullMQ/Redis streams พร้อม dead-letter queue
 - Rate limit ใช้ Redis เมื่อกำหนด `RATE_LIMIT_REDIS_URL` และ fallback เป็น SQLite แต่ production หลาย instance ควรบังคับ Redis ให้พร้อมใช้งานเสมอ
 - การสรุปทั้งเอกสารครอบคลุมทุก chunk ผ่าน summary cache และ context fitting แล้ว แต่เอกสารใหญ่มากยังควรเพิ่ม map-reduce summarization แบบหลายชั้นเพื่อสรุประดับ section/chapter ให้ละเอียดขึ้นโดยไม่ชน context limit
+- ปุ่มสรุปเอกสารผูกกับเอกสารที่เลือกแล้ว แต่ยังไม่ได้รัน Playwright browser e2e จริงล่าสุดเพราะ sandbox/approval limit ของเครื่องมือ ไม่ใช่ failure จากโค้ด
 - SQLite เหมาะกับ assignment/local demo แต่ production ที่มีผู้ใช้พร้อมกันจำนวนมากควรพิจารณา PostgreSQL
 - Chroma reconciliation ยังเป็น manual re-index/admin endpoint ยังไม่มี scheduled reconciliation อัตโนมัติ
 - Observability มี diagnostics และ structured worker logs แล้ว แต่ยังไม่มี external metrics/alerting เช่น Prometheus หรือ OpenTelemetry

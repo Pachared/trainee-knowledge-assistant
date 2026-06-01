@@ -188,6 +188,49 @@ test.describe("management actions", () => {
   });
 });
 
+test.describe("document summary shortcut", () => {
+  test("sends the selected document id when clicking the summary button", async ({ page, isMobile }) => {
+    test.skip(isMobile, "desktop-only summary shortcut assertion");
+
+    await login(page);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const title = `summary-shortcut-${suffix}`;
+    const document = await uploadTextDocument(page, `${title}.txt`, "Shortcut summary document context.");
+    let chatPayload: { message?: string; documentId?: string } | undefined;
+
+    await page.goto("/chat");
+    await expect(page.getByText("เลือกเอกสารก่อนสรุป")).toBeVisible();
+    await expect(page.getByRole("button", { name: "สรุปเอกสาร" })).toBeDisabled();
+
+    await page.getByLabel("เลือกเอกสารสำหรับ RAG").click();
+    await page.getByRole("option", { name: title }).click();
+    await expect(page.getByText("พร้อมสรุปเอกสารที่เลือก")).toBeVisible();
+
+    await page.route("**/api/chat", async (route) => {
+      chatPayload = JSON.parse(route.request().postData() ?? "{}") as typeof chatPayload;
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream; charset=utf-8",
+        body: [
+          `event: meta\ndata: ${JSON.stringify({ chatId: "summary-shortcut-chat", citations: [] })}`,
+          `event: delta\ndata: ${JSON.stringify({ content: "สรุปทดสอบ" })}`,
+          `event: done\ndata: ${JSON.stringify({ message: { id: "assistant-1", content: "สรุปทดสอบ" }, usage: {} })}`,
+          ""
+        ].join("\n\n")
+      });
+    });
+
+    await page.getByRole("button", { name: "สรุปเอกสาร" }).click();
+
+    await expect
+      .poll(() => chatPayload)
+      .toMatchObject({
+        documentId: document.id,
+        message: expect.stringContaining("เอกสารนี้ทั้งหมด")
+      });
+  });
+});
+
 test.describe("mobile drawer", () => {
   test("opens sidebar drawer with chat actions and history", async ({ page, isMobile }) => {
     test.skip(!isMobile, "mobile-only drawer assertion");

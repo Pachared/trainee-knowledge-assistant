@@ -15,13 +15,14 @@ import ArrowUpwardOutlinedIcon from "@mui/icons-material/ArrowUpwardOutlined";
 import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
 import type { ApiDocument } from "@/components/app/types";
+import { canSummarizeDocument, DOCUMENT_SUMMARY_PROMPT } from "@/components/chat/summary-action";
 
 type ComposerProps = {
   documents: ApiDocument[];
   disabled?: boolean;
   onSend: (message: string, documentId?: string) => void;
   onUpload: (file: File) => Promise<void>;
-  onPrompt: (message: string) => void;
+  onPrompt: (message: string, documentId?: string) => void;
 };
 
 export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: ComposerProps) {
@@ -29,6 +30,7 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
   const [documentId, setDocumentId] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canSummarize = canSummarizeDocument(documentId);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -139,13 +141,14 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
             type="button"
             variant="outlined"
             startIcon={<AutoAwesomeOutlinedIcon />}
-            onClick={() => onPrompt("สรุปเอกสารที่อัปโหลดล่าสุดให้เป็น bullet point")}
+            disabled={disabled || !canSummarize}
+            onClick={() => onPrompt(DOCUMENT_SUMMARY_PROMPT, documentId)}
             sx={{ borderRadius: 999, bgcolor: "background.paper" }}
           >
             สรุปเอกสาร
           </Button>
           <Typography variant="caption" color="text.secondary">
-            {uploading ? "กำลังอัปโหลด..." : "รองรับ PDF/TXT"}
+            {uploading ? "กำลังอัปโหลด..." : canSummarize ? "พร้อมสรุปเอกสารที่เลือก" : "เลือกเอกสารก่อนสรุป"}
           </Typography>
         </Stack>
         <input

@@ -76,7 +76,7 @@ export function ChatView({ messages, documents, streaming, status, onSend, onUpl
         disabled={streaming}
         onSend={onSend}
         onUpload={onUpload}
-        onPrompt={(message) => onSend(message)}
+        onPrompt={(message, documentId) => onSend(message, documentId)}
       />
     </Box>
   );

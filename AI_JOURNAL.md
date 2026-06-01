@@ -177,3 +177,19 @@
 **AI Response:** เพิ่ม test เพื่อยืนยันว่า summary cache ต้องครอบคลุมทุก chunk ไม่ใช่ sampling เฉพาะบางส่วน และเพิ่ม test ให้ prompt มีคำสั่งสรุปแบบละเอียด จากนั้นปรับ `buildExtractiveDocumentSummary` ให้เรียงทุก chunk ตามลำดับเอกสาร, เพิ่ม summary source version เพื่อบังคับ regenerate cache, และส่ง `summaryMode: "comprehensive"` เข้า assistant prompt เมื่อผู้ใช้ถามสรุปทั้งเอกสาร
 
 **My Adjustment:** ผู้ใช้ต้องการให้ผลสรุปไม่ตกหล่นเนื้อหาสำคัญ จึงต้องเปลี่ยนพฤติกรรมจาก “ดึง context บางส่วนที่เกี่ยวข้อง” เป็น “ใช้ภาพรวมและทุกส่วนของเอกสารเท่าที่ token budget อนุญาต” พร้อมตรวจด้วย test, lint และ production build
+
+## Session 23: ปรับคำตอบสรุปให้อ่านง่ายและเป็นระเบียบ
+
+**Prompt:** AI ที่สรุปเอกสารให้สรุปแปลก ๆ ไม่เป็นระเบียบและอ่านไม่เข้าใจ ให้เช็คใหม่และแก้ไข
+
+**AI Response:** ตรวจพบว่า prompt เดิมมีคำสั่งขัดกันเอง คือบอกให้ “กระชับ” แต่ผู้ใช้ต้องการสรุปละเอียด และยังไม่มี template บังคับรูปแบบคำตอบ จึงปรับ `buildAssistantPrompt` ให้ comprehensive summary mode ใช้คำสั่งเฉพาะสำหรับการสรุปละเอียด, ห้ามตอบเป็นย่อหน้ายาว, ห้าม dump chunk ดิบ และบังคับหัวข้อ Markdown เช่น ภาพรวม, ประเด็นสำคัญ, รายละเอียดตามลำดับเอกสาร, ข้อสรุป และข้อจำกัด
+
+**My Adjustment:** ผู้ใช้ต้องการให้คำตอบใช้งานอ่านจริงได้ จึงเพิ่ม regression test ใน `tests/assistant-prompt.test.ts` เพื่อกันไม่ให้ prompt กลับไปใช้คำว่า “กระชับ” ในโหมดสรุปละเอียด และยืนยันว่ามี template คำตอบที่อ่านง่าย
+
+## Session 24: แก้ปุ่มสรุปเอกสารให้ผูกกับเอกสารที่เลือก
+
+**Prompt:** ปุ่ม “สรุปเอกสาร” ทำงานยังไง และให้แก้ส่วนที่ควรแก้พร้อมตรวจซ้ำ
+
+**AI Response:** ตรวจพบว่าปุ่มเดิมส่ง quick prompt เฉย ๆ โดยไม่ส่ง `documentId` ทำให้ backend ไม่เข้าโหมด `retrieveWholeDocumentContext` และอาจกลายเป็น RAG top-k ปกติ จึงเพิ่ม `summary-action.ts`, เปลี่ยนปุ่มให้ disable จนกว่าจะเลือกเอกสาร, ส่ง prompt กลางแบบสรุปทั้งเอกสารพร้อม `documentId`, และเพิ่ม Playwright e2e test สำหรับ flow นี้
+
+**My Adjustment:** ผู้ใช้ต้องการให้ปุ่มทำงานตรงกับความคาดหวัง ไม่ใช่แค่ข้อความลัด จึงตรวจด้วย unit test, lint และ build ส่วน e2e browser test ถูกเพิ่มไว้แล้วแต่การรันจริงล่าสุดติด sandbox/approval limit ของเครื่องมือ
