@@ -23,6 +23,7 @@ export type ApiCitation = {
   documentId?: string;
   title: string;
   chunkIndex?: number;
+  pageNumber?: number | null;
   excerpt?: string;
 };
 
@@ -34,6 +35,8 @@ export type ApiDocument = {
   size: number;
   status: string;
   failedReason?: string | null;
+  jobStage?: string | null;
+  jobProgress?: number;
   createdAt: string;
   _count?: {
     chunks: number;

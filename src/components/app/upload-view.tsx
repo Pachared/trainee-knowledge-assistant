@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -119,7 +120,17 @@ export function UploadView({
             เพิ่มไฟล์ PDF/TXT เพื่อให้ระบบนำไปใช้ค้นหา อ้างอิง และสรุปเอกสารในหน้าแชท
           </Typography>
           {statusFeedback ? (
-            <Alert severity={statusFeedback.severity} sx={{ mb: 2, bgcolor: "background.paper" }}>
+            <Alert
+              severity={statusFeedback.severity}
+              sx={{ mb: 2, bgcolor: "background.paper" }}
+              action={
+                statusFeedback.actionHref && statusFeedback.actionHref !== "/upload" ? (
+                  <Button component={Link} href={statusFeedback.actionHref} size="small" color="inherit">
+                    {statusFeedback.actionLabel ?? "เปิดดู"}
+                  </Button>
+                ) : undefined
+              }
+            >
               <Typography variant="body2" sx={{ fontWeight: 800 }}>
                 {statusFeedback.title}
               </Typography>

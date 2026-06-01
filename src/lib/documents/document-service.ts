@@ -5,8 +5,8 @@ import { prisma } from "@/lib/db/prisma";
 import { getNumberEnv } from "@/lib/env";
 import { computeDocumentRetryDelayMs } from "@/lib/documents/document-job";
 import { saveUpload } from "@/lib/documents/file-storage";
-import { extractTextFromFile } from "@/lib/documents/extract-text";
-import { chunkText } from "@/lib/rag/chunker";
+import { extractTextWithPagesFromFile } from "@/lib/documents/extract-text";
+import { chunkTextPages } from "@/lib/rag/chunker";
 import { buildExtractiveDocumentSummary, estimateSummaryTokens, hashSummarySource } from "@/lib/rag/document-summary";
 import { deleteDocumentFromChroma, indexChunksInChroma } from "@/lib/rag/rag-service";
 import { uploadConstraints } from "@/lib/validation/schemas";
@@ -59,6 +59,8 @@ export async function uploadDocument(userId: string, file: File) {
       path: saved.path,
       status: "queued",
       failedReason: null,
+      jobStage: "queued",
+      jobProgress: 10,
       indexingAttempts: 0,
       lockedAt: null,
       lockedBy: null,
@@ -87,6 +89,16 @@ async function clearJobLock(documentId: string, data: Record<string, unknown>) {
   });
 }
 
+async function updateJobProgress(documentId: string, jobStage: string, jobProgress: number) {
+  return prisma.document.update({
+    where: { id: documentId },
+    data: {
+      jobStage,
+      jobProgress
+    }
+  });
+}
+
 async function retryOrFailDocument(document: { id: string; indexingAttempts: number }, error: unknown) {
   const maxAttempts = getNumberEnv("DOCUMENT_WORKER_MAX_ATTEMPTS", 3);
   const nextAttempts = document.indexingAttempts + 1;
@@ -96,6 +108,8 @@ async function retryOrFailDocument(document: { id: string; indexingAttempts: num
     return clearJobLock(document.id, {
       status: "queued",
       failedReason,
+      jobStage: "retry_waiting",
+      jobProgress: 15,
       indexingAttempts: nextAttempts,
       nextAttemptAt: new Date(Date.now() + computeDocumentRetryDelayMs(nextAttempts))
     });
@@ -104,6 +118,8 @@ async function retryOrFailDocument(document: { id: string; indexingAttempts: num
   return clearJobLock(document.id, {
     status: "failed",
     failedReason,
+    jobStage: "failed",
+    jobProgress: 100,
     indexingAttempts: nextAttempts,
     nextAttemptAt: null
   });
@@ -152,20 +168,25 @@ export async function processDocument(documentId: string, workerId = "manual") {
     data: {
       status: "processing",
       failedReason: null,
+      jobStage: "starting",
+      jobProgress: 20,
       lockedAt: new Date(),
       lockedBy: workerId
     }
   });
 
   try {
+    await updateJobProgress(document.id, "extracting", 30);
     const buffer = await readFile(document.path);
-    const text = await extractTextFromFile(buffer, document.mimeType);
-    const chunks = chunkText(text);
+    const extracted = await extractTextWithPagesFromFile(buffer, document.mimeType);
+    await updateJobProgress(document.id, "chunking", 45);
+    const chunks = chunkTextPages(extracted.pages);
 
     if (!chunks.length) {
       throw new Error("ไม่พบข้อความในไฟล์");
     }
 
+    await updateJobProgress(document.id, "saving_chunks", 55);
     await deleteDocumentFromChroma(document.id).catch(() => undefined);
     await prisma.documentChunk.deleteMany({
       where: { documentId: document.id }
@@ -179,11 +200,13 @@ export async function processDocument(documentId: string, workerId = "manual") {
             chunkIndex: chunk.index,
             content: chunk.content,
             tokenCount: chunk.tokenCount,
-            chromaId: `${document.id}-${chunk.index}-${randomUUID()}`
+            chromaId: `${document.id}-${chunk.index}-${randomUUID()}`,
+            pageNumber: chunk.pageNumber ?? null
           }
         })
       )
     );
+    await updateJobProgress(document.id, "summarizing", 68);
     await upsertDocumentSummary(
       document.id,
       document.title,
@@ -194,6 +217,7 @@ export async function processDocument(documentId: string, workerId = "manual") {
     );
 
     try {
+      await updateJobProgress(document.id, "embedding", 78);
       await indexChunksInChroma({
         userId: document.userId,
         documentId: document.id,
@@ -207,6 +231,8 @@ export async function processDocument(documentId: string, workerId = "manual") {
       await clearJobLock(document.id, {
         status: "ready",
         failedReason: null,
+        jobStage: "ready",
+        jobProgress: 100,
         indexingAttempts: 0,
         nextAttemptAt: null,
         lastIndexedAt: new Date()
@@ -217,6 +243,8 @@ export async function processDocument(documentId: string, workerId = "manual") {
       await clearJobLock(document.id, {
         status: "ready_without_chroma",
         failedReason: `Chroma indexing failed: ${formatFailureReason(error)}`,
+        jobStage: "fallback_ready",
+        jobProgress: 90,
         indexingAttempts: nextAttempts,
         nextAttemptAt: nextAttempts < maxAttempts
           ? new Date(Date.now() + computeDocumentRetryDelayMs(nextAttempts))
@@ -273,9 +301,11 @@ export async function claimNextDocumentJob(workerId: string) {
         { status: document.status, lockedAt: null }
       ]
     },
-    data: {
-      status: "processing",
-      lockedAt: now,
+      data: {
+        status: "processing",
+        jobStage: "starting",
+        jobProgress: 20,
+        lockedAt: now,
       lockedBy: workerId
     }
   });
@@ -340,6 +370,33 @@ export async function deleteDocument(userId: string, documentId: string) {
   await unlink(document.path).catch(() => undefined);
 }
 
+export async function getDocumentPreview(userId: string, documentId: string, chunkId?: string) {
+  const document = await prisma.document.findFirst({
+    where: {
+      id: documentId,
+      userId
+    },
+    include: {
+      chunks: {
+        where: chunkId ? { id: chunkId } : undefined,
+        orderBy: { chunkIndex: "asc" },
+        take: chunkId ? 1 : 8
+      },
+      _count: {
+        select: {
+          chunks: true
+        }
+      }
+    }
+  });
+
+  if (!document) {
+    throw new Error("ไม่พบเอกสารนี้");
+  }
+
+  return document;
+}
+
 export async function reindexDocument(userId: string, documentId: string) {
   const document = await prisma.document.findFirst({
     where: {
@@ -362,13 +419,16 @@ export async function reindexDocument(userId: string, documentId: string) {
       where: { id: document.id },
       data: {
         status: "failed",
-        failedReason: "ไม่สามารถ re-index ได้ เพราะเอกสารนี้ไม่มี chunks"
+        failedReason: "ไม่สามารถ re-index ได้ เพราะเอกสารนี้ไม่มี chunks",
+        jobStage: "failed",
+        jobProgress: 100
       }
     });
     throw new Error(updated.failedReason ?? "ไม่สามารถ re-index ได้");
   }
 
   try {
+    await updateJobProgress(document.id, "reindexing_chroma", 82);
     await deleteDocumentFromChroma(document.id).catch(() => undefined);
     await indexChunksInChroma({
       userId,
@@ -385,7 +445,10 @@ export async function reindexDocument(userId: string, documentId: string) {
       where: { id: document.id },
       data: {
         status: "ready",
-        failedReason: null
+        failedReason: null,
+        jobStage: "ready",
+        jobProgress: 100,
+        lastIndexedAt: new Date()
       }
     });
   } catch (error) {
@@ -394,7 +457,9 @@ export async function reindexDocument(userId: string, documentId: string) {
       where: { id: document.id },
       data: {
         status: "ready_without_chroma",
-        failedReason
+        failedReason,
+        jobStage: "fallback_ready",
+        jobProgress: 90
       }
     });
 

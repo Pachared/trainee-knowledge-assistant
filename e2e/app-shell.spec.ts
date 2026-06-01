@@ -63,7 +63,16 @@ async function uploadTextDocument(page: Page, filename: string, content: string)
         const current = documentsPayload.data?.documents?.find((item) => item.id === document.id);
 
         if (current && current.status !== "queued" && current.status !== "processing" && (current._count?.chunks ?? 0) > 0) {
-          return document;
+          const previewResponse = await fetch(`/api/documents/${document.id}`);
+          const previewPayload = (await previewResponse.json()) as {
+            ok: boolean;
+            data?: { document?: { chunks?: Array<{ id: string; pageNumber?: number | null }> } };
+          };
+          return {
+            ...document,
+            firstChunkId: previewPayload.data?.document?.chunks?.[0]?.id,
+            firstPageNumber: previewPayload.data?.document?.chunks?.[0]?.pageNumber
+          };
         }
 
         await new Promise((resolve) => setTimeout(resolve, 250));
@@ -236,7 +245,7 @@ test.describe("document summary shortcut", () => {
     await login(page);
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const title = `citation-doc-${suffix}`;
-    await uploadTextDocument(page, `${title}.txt`, "Citation source text from uploaded document.");
+    const document = await uploadTextDocument(page, `${title}.txt`, "Citation source text from uploaded document.");
 
     await page.goto("/chat");
     await page.getByLabel("เลือกเอกสารสำหรับ RAG").click();
@@ -252,9 +261,10 @@ test.describe("document summary shortcut", () => {
             citations: [
               {
                 index: 1,
-                chunkId: "chunk-1",
-                documentId: "doc-1",
+                chunkId: document.firstChunkId ?? "chunk-1",
+                documentId: document.id,
                 title,
+                pageNumber: document.firstPageNumber ?? 1,
                 chunkIndex: 0,
                 excerpt: "Citation source text from uploaded document."
               }
@@ -272,9 +282,10 @@ test.describe("document summary shortcut", () => {
               citations: [
                 {
                   index: 1,
-                  chunkId: "chunk-1",
-                  documentId: "doc-1",
+                  chunkId: document.firstChunkId ?? "chunk-1",
+                  documentId: document.id,
                   title,
+                  pageNumber: document.firstPageNumber ?? 1,
                   chunkIndex: 0,
                   excerpt: "Citation source text from uploaded document."
                 }
@@ -295,6 +306,7 @@ test.describe("document summary shortcut", () => {
     await expect(page.getByText("คำตอบพร้อมอ้างอิง")).toBeVisible();
     await page.getByRole("button", { name: "อ้างอิง 1" }).click();
     await expect(page.getByRole("dialog", { name: "แหล่งอ้างอิงจากเอกสาร" })).toContainText("Citation source text from uploaded document.");
+    await expect(page.getByRole("dialog", { name: "แหล่งอ้างอิงจากเอกสาร" })).toContainText("หน้า 1");
   });
 });
 
@@ -329,5 +341,18 @@ test.describe("mobile drawer", () => {
     await page.getByRole("menuitem", { name: "ดูการใช้งานโทเคน" }).click();
     await expect(page).toHaveURL(/\/usage$/);
     await expect(page.getByRole("heading", { name: "การใช้งานโทเคน" })).toBeVisible();
+  });
+
+  test("keeps composer controls usable on mobile", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "mobile-only composer assertion");
+
+    await login(page);
+
+    const composerInput = page.getByPlaceholder("ถามอะไรก็ได้");
+    await expect(composerInput).toBeVisible();
+    await composerInput.fill("ทดสอบ mobile composer");
+    await expect(page.getByRole("button", { name: "ส่งข้อความ" })).toBeEnabled();
+    await page.getByLabel("เลือกเอกสารสำหรับ RAG").click();
+    await expect(page.getByRole("listbox")).toBeVisible();
   });
 });

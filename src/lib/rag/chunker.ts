@@ -4,6 +4,7 @@ export type TextChunk = {
   index: number;
   content: string;
   tokenCount: number;
+  pageNumber?: number;
 };
 
 type ChunkOptions = {
@@ -51,6 +52,24 @@ export function chunkText(text: string, options: ChunkOptions = {}): TextChunk[]
     }
 
     cursor = Math.max(0, end - overlapChars);
+  }
+
+  return chunks;
+}
+
+export function chunkTextPages(pages: Array<{ pageNumber: number; text: string }>, options: ChunkOptions = {}): TextChunk[] {
+  const chunks: TextChunk[] = [];
+
+  for (const page of pages) {
+    const pageChunks = chunkText(page.text, options);
+
+    for (const chunk of pageChunks) {
+      chunks.push({
+        ...chunk,
+        index: chunks.length,
+        pageNumber: page.pageNumber
+      });
+    }
   }
 
   return chunks;

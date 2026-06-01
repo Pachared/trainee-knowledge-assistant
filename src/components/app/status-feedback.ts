@@ -3,6 +3,8 @@ export type StatusFeedback = {
   title: string;
   message: string;
   nextStep?: string;
+  actionLabel?: string;
+  actionHref?: string;
 };
 
 export function getStatusFeedback(status?: string): StatusFeedback | null {
@@ -17,7 +19,9 @@ export function getStatusFeedback(status?: string): StatusFeedback | null {
       severity: "error",
       title: "AI ยังตอบไม่ได้",
       message: status,
-      nextStep: "เปิดหน้าตรวจระบบเพื่อดู OpenAI key, quota และ model ที่ตั้งค่าไว้"
+      nextStep: "เปิดหน้าตรวจระบบเพื่อดู OpenAI key, quota และ model ที่ตั้งค่าไว้",
+      actionLabel: "เปิด Diagnostics",
+      actionHref: "/admin"
     };
   }
 
@@ -26,7 +30,9 @@ export function getStatusFeedback(status?: string): StatusFeedback | null {
       severity: lower.includes("ไม่สำเร็จ") || lower.includes("failed") ? "warning" : "success",
       title: lower.includes("ไม่สำเร็จ") || lower.includes("failed") ? "ดัชนีเอกสารยังไม่สมบูรณ์" : "อัปเดตดัชนีแล้ว",
       message: status,
-      nextStep: lower.includes("ไม่สำเร็จ") || lower.includes("failed") ? "ยังถามจาก SQLite fallback ได้ แล้วลองกดสร้างดัชนีใหม่อีกครั้ง" : undefined
+      nextStep: lower.includes("ไม่สำเร็จ") || lower.includes("failed") ? "ยังถามจาก SQLite fallback ได้ แล้วลองกดสร้างดัชนีใหม่อีกครั้ง" : undefined,
+      actionLabel: lower.includes("ไม่สำเร็จ") || lower.includes("failed") ? "ไปหน้าอัปโหลด" : undefined,
+      actionHref: lower.includes("ไม่สำเร็จ") || lower.includes("failed") ? "/upload" : undefined
     };
   }
 
@@ -35,7 +41,9 @@ export function getStatusFeedback(status?: string): StatusFeedback | null {
       severity: lower.includes("ไม่สำเร็จ") ? "error" : "info",
       title: lower.includes("ไม่สำเร็จ") ? "อัปโหลดไม่สำเร็จ" : "รับไฟล์แล้ว",
       message: status,
-      nextStep: lower.includes("ไม่สำเร็จ") ? "ตรวจชนิดไฟล์ ขนาดไฟล์ แล้วลองอัปโหลดอีกครั้ง" : "รอสถานะเอกสารเปลี่ยนเป็นพร้อมใช้งาน"
+      nextStep: lower.includes("ไม่สำเร็จ") ? "ตรวจชนิดไฟล์ ขนาดไฟล์ แล้วลองอัปโหลดอีกครั้ง" : "รอสถานะเอกสารเปลี่ยนเป็นพร้อมใช้งาน",
+      actionLabel: "ไปหน้าอัปโหลด",
+      actionHref: "/upload"
     };
   }
 
@@ -52,7 +60,9 @@ export function getStatusFeedback(status?: string): StatusFeedback | null {
       severity: "error",
       title: "เกิดข้อผิดพลาด",
       message: status,
-      nextStep: "ลองใหม่อีกครั้ง หรือเปิดหน้าตรวจระบบถ้าเกิดซ้ำ"
+      nextStep: "ลองใหม่อีกครั้ง หรือเปิดหน้าตรวจระบบถ้าเกิดซ้ำ",
+      actionLabel: "เปิด Diagnostics",
+      actionHref: "/admin"
     };
   }
 

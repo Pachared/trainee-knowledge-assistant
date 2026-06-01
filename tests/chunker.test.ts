@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkText } from "@/lib/rag/chunker";
+import { chunkText, chunkTextPages } from "@/lib/rag/chunker";
 
 describe("chunkText", () => {
   it("creates overlapping chunks that preserve source order", () => {
@@ -16,5 +16,16 @@ describe("chunkText", () => {
 
   it("returns an empty array for blank input", () => {
     expect(chunkText(" \n\t ")).toEqual([]);
+  });
+
+  it("preserves page number metadata when chunking pages", () => {
+    const chunks = chunkTextPages([
+      { pageNumber: 1, text: "หน้าแรกมีเนื้อหาเกี่ยวกับระบบ RAG และ upload" },
+      { pageNumber: 2, text: "หน้าสองมีเนื้อหาเกี่ยวกับ citation และ diagnostics" }
+    ]);
+
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toMatchObject({ index: 0, pageNumber: 1 });
+    expect(chunks[1]).toMatchObject({ index: 1, pageNumber: 2 });
   });
 });

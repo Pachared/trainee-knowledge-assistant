@@ -83,6 +83,7 @@ export async function POST(request: Request) {
       documentId: context.documentId,
       title: context.documentTitle,
       chunkIndex: context.chunkIndex,
+      pageNumber: context.pageNumber,
       excerpt: context.content.slice(0, 700)
     }));
     const prompt = buildAssistantPrompt(assistantInput);

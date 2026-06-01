@@ -6,17 +6,23 @@ describe("rankFallbackChunks", () => {
     {
       id: "a",
       content: "invoice payment apple banana",
-      document: { title: "Billing" }
+      chunkIndex: 0,
+      pageNumber: 1,
+      document: { id: "doc-a", title: "Billing" }
     },
     {
       id: "b",
       content: "apple apple apple payment due date",
-      document: { title: "Invoice apple" }
+      chunkIndex: 1,
+      pageNumber: 2,
+      document: { id: "doc-b", title: "Invoice apple" }
     },
     {
       id: "c",
       content: "unrelated project timeline",
-      document: { title: "Project" }
+      chunkIndex: 2,
+      pageNumber: null,
+      document: { id: "doc-c", title: "Project" }
     }
   ];
 

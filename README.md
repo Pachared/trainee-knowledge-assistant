@@ -110,10 +110,12 @@ npm run test:docker:rag
 - [x] Chat auto-scroll ระหว่างถามและตอน AI กำลังตอบ
 - [x] Upload polling แสดงสถานะเอกสารที่กำลังประมวลผล
 - [x] Document status UX แบบ step/progress พร้อมวิธีแก้เมื่อเอกสารผิดพลาด
+- [x] Worker progress fields (`jobStage`, `jobProgress`) เพื่อให้ UI แสดงขั้นตอนจริงมากขึ้น
 - [x] Document picker ในหน้า chat ที่ค้นหาไฟล์ได้ แยกเอกสารพร้อมใช้งานและยังไม่พร้อม
-- [x] แสดงเอกสารที่ AI กำลังใช้ตอบ และเปิด citation เพื่อดูข้อความต้นทางได้
+- [x] แสดงเอกสารที่ AI กำลังใช้ตอบ และเปิด citation เพื่อดูข้อความต้นทาง/หน้า PDF ได้
+- [x] Citation preview endpoint สำหรับโหลด chunk ต้นทางจากเอกสารย้อนหลัง
 - [x] Empty state พร้อมปุ่ม action ในหน้า chat, upload และ usage
-- [x] Admin diagnostics แสดง next step เมื่อ OpenAI/Chroma/Redis/DB/upload directory มีปัญหา
+- [x] Admin diagnostics และ error alert แสดง next step พร้อมปุ่มไปหน้าที่เกี่ยวข้อง
 
 ## Architecture
 
@@ -176,10 +178,10 @@ Accent: #84CC16
 
 หลัง upload สำเร็จ UI จะบอกว่าระบบกำลังประมวลผลเอกสาร และหน้าแอปจะ polling สถานะเอกสารที่ยังเป็น `queued` หรือ `processing` ทุก 3 วินาที จนเอกสารเปลี่ยนเป็น `ready`, `ready_without_chroma` หรือ `failed`
 
-หน้า upload แสดงสถานะเอกสารแบบอ่านง่ายเป็น step/progress:
+หน้า upload แสดงสถานะเอกสารแบบอ่านง่ายเป็น step/progress โดยอ่านจาก `jobStage` และ `jobProgress` ที่ worker อัปเดตระหว่างทำงาน:
 
 - `รอประมวลผล`: รับไฟล์แล้วและรอ worker
-- `กำลังประมวลผล`: worker กำลังอ่านข้อความ แบ่ง chunks และเตรียม index
+- `กำลังประมวลผล`: worker กำลังอ่านข้อความ แบ่ง chunks บันทึก chunks สร้าง summary cache และเตรียม index
 - `พร้อมใช้งาน`: อ่านไฟล์และ index เข้า Chroma สำเร็จ
 - `พร้อมใช้แบบสำรอง`: อ่านไฟล์สำเร็จ แต่ Chroma ยังไม่สมบูรณ์ ระบบจะใช้ SQLite fallback ได้
 - `อ่านไฟล์ไม่สำเร็จ`: แสดง `failedReason` และคำแนะนำว่าควรแก้ไฟล์หรืออัปโหลดใหม่อย่างไร
@@ -200,7 +202,9 @@ worker จะ claim งานจากเอกสารสถานะ `queued`
 
 หน้า chat มี document picker แบบค้นหาได้ ผู้ใช้เลือกไฟล์เฉพาะเพื่อถาม/สรุป หรือปล่อยว่างเพื่อให้ระบบค้นจากทุกเอกสารที่พร้อมใช้งานได้ ถ้าเลือกเอกสารแล้ว UI จะแสดงแถบ “กำลังถามจาก” พร้อมสถานะของไฟล์ เพื่อป้องกันการถามผิดเอกสารเมื่อมีหลายไฟล์
 
-เมื่อ AI ตอบพร้อม citation ระบบจะแสดงปุ่ม `อ้างอิง` ใต้คำตอบ ผู้ใช้กดแล้วเห็นชื่อเอกสาร ตำแหน่ง chunk และข้อความต้นทางบางส่วนใน dialog ทำให้ตรวจสอบคำตอบย้อนหลังได้ง่ายขึ้น
+เมื่อ AI ตอบพร้อม citation ระบบจะแสดงปุ่ม `อ้างอิง` ใต้คำตอบ ผู้ใช้กดแล้วเห็นชื่อเอกสาร หน้าเอกสารเมื่อเป็น PDF/TXT ที่ map ได้ ตำแหน่ง chunk และข้อความต้นทางใน dialog ทำให้ตรวจสอบคำตอบย้อนหลังได้ง่ายขึ้น
+
+ระบบเพิ่ม `/api/documents/[documentId]?chunkId=...` เพื่อโหลด citation preview จาก chunk จริงย้อนหลัง ถ้าเป็น PDF parser จะเก็บ `pageNumber` ลง `DocumentChunk` เพื่อแสดงตำแหน่งหน้าใน citation dialog
 
 ### 6. Summarize Whole Document
 
@@ -261,6 +265,8 @@ FULL_DOCUMENT_CONTEXT_MAX_TOKENS=120000
 
 หน้า admin จะแสดงสถานะเป็น `ปกติ`, `ควรตรวจสอบ`, `ผิดปกติ` และถ้า service มีปัญหาจะมีช่อง “วิธีแก้ต่อไป” เช่น ตรวจ OpenAI key/quota, restart Chroma, ตรวจ Redis URL, ตรวจ DATABASE_URL หรือ permission ของ upload volume
 
+alert ในหน้า chat/upload มีปุ่ม recovery เช่น `เปิด Diagnostics` หรือ `ไปหน้าอัปโหลด` เมื่อ error นั้นมี action ที่ผู้ใช้ทำต่อได้ทันที
+
 เข้าใช้งานผ่าน:
 
 ```text
@@ -284,4 +290,4 @@ curl http://localhost:3000/api/admin/diagnostics
 - SQLite เหมาะกับ assignment/local demo แต่ production ที่มีผู้ใช้พร้อมกันจำนวนมากควรพิจารณา PostgreSQL
 - Chroma reconciliation ยังเป็น manual re-index/admin endpoint ยังไม่มี scheduled reconciliation อัตโนมัติ
 - Observability มี diagnostics และ structured worker logs แล้ว แต่ยังไม่มี external metrics/alerting เช่น Prometheus หรือ OpenTelemetry
-- Citation dialog แสดง excerpt จาก chunk แล้ว แต่ยังไม่ใช่ document viewer เต็มรูปแบบ ถ้าต้องการตรวจเอกสารระดับหน้า/ย่อหน้า ควรเพิ่ม preview หรือ page mapping สำหรับ PDF
+- Citation dialog แสดง excerpt และ page number ได้แล้ว แต่ยังไม่ใช่ PDF viewer แบบ highlight บนไฟล์จริง ถ้าต้องการตรวจระดับ pixel/page ใน PDF ควรเพิ่ม viewer ที่ render PDF และ jump ไปหน้าที่อ้างอิง

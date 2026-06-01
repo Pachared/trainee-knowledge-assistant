@@ -57,6 +57,8 @@ model Document {
   path             String
   status           String           @default("processing")
   failedReason     String?
+  jobStage         String?
+  jobProgress      Int              @default(0)
   indexingAttempts Int              @default(0)
   lockedBy         String?
   lockedAt         DateTime?
@@ -80,6 +82,7 @@ model DocumentChunk {
   content    String
   tokenCount Int
   chromaId   String   @unique
+  pageNumber Int?
   createdAt  DateTime @default(now())
 
   @@index([documentId, chunkIndex])

@@ -209,3 +209,11 @@
 **AI Response:** เพิ่ม helper กลาง `document-status.ts` เพื่อแปลงสถานะเอกสารเป็น label, step, progress, helper text และ next step, เพิ่ม `status-feedback.ts` เพื่อแสดง error/status เป็นข้อความไทยที่บอกสาเหตุและสิ่งที่ต้องทำต่อ, ปรับ upload view ให้มี progress/step ต่อเอกสาร, เปลี่ยน document picker เป็น MUI Autocomplete ที่ค้นหาไฟล์ได้และแยกกลุ่มพร้อมใช้งาน/ยังไม่พร้อม, lift selected document state ไปที่ chat view เพื่อแสดง “กำลังถามจาก”, เพิ่ม citation metadata จาก backend และ citation dialog ที่เปิดดู excerpt ต้นทางได้, เพิ่ม empty state พร้อมปุ่ม action ใน upload/usage และเพิ่ม next step ใน admin diagnostics
 
 **My Adjustment:** ผู้ใช้ต้องการให้ UX/UI ทุกส่วนที่จำเป็นใช้งานได้จริง ไม่ใช่เฉพาะหน้าตา จึงเพิ่ม/ปรับ Playwright e2e สำหรับ summary shortcut, selected document context, clickable citation และ mobile actions menu พร้อมรัน lint, test, build และ e2e ก่อน push
+
+## Session 27: ปิด gap UX/UI production ที่เหลือ 4 จุด
+
+**Prompt:** ทำทั้งหมดตั้งแต่ข้อ 1-4 ที่ยังไปไม่สุด ได้แก่ citation ระดับหน้า/preview, progress เอกสารที่ละเอียดกว่าเดิม, QA mobile composer/menu และ error recovery ที่มีปุ่ม action พร้อมอัปเดตเอกสารและ push
+
+**AI Response:** เพิ่ม migration สำหรับ `Document.jobStage`, `Document.jobProgress` และ `DocumentChunk.pageNumber`, ปรับ PDF/TXT extraction ให้คืน page metadata, เพิ่ม `chunkTextPages` เพื่อให้ chunks รักษาเลขหน้า, ให้ worker อัปเดต stage/progress ระหว่าง extracting, chunking, saving chunks, summarizing, embedding/re-indexing และ ready/fallback/failed, เพิ่ม `/api/documents/[documentId]?chunkId=...` สำหรับ citation preview, ปรับ citation dialog ให้โหลดข้อความ chunk จริงพร้อมแสดงหน้าและจำนวน chunks, เพิ่ม recovery action ใน error/status alert เช่นเปิด Diagnostics หรือไปหน้าอัปโหลด และเพิ่ม mobile e2e สำหรับ composer controls
+
+**My Adjustment:** ผู้ใช้ต้องการปิด UX/UI ที่จำเป็นจริง ๆ ให้ครบ จึงตรวจด้วย lint, unit/integration tests, production build และจะรัน Playwright e2e/Docker/Browser ก่อน push เพื่อยืนยันว่า UX ใช้งานได้ปกติทั้ง desktop และ mobile

@@ -106,6 +106,13 @@ export function ChatView({ messages, documents, streaming, status, onSend, onUpl
         <Alert
           severity={statusFeedback.severity}
           sx={{ mx: { xs: 1.5, md: "auto" }, mb: 1, width: { md: "min(100% - 48px, 920px)" }, bgcolor: "background.paper" }}
+          action={
+            statusFeedback.actionHref ? (
+              <Button component={Link} href={statusFeedback.actionHref} size="small" color="inherit">
+                {statusFeedback.actionLabel ?? "เปิดดู"}
+              </Button>
+            ) : undefined
+          }
         >
           <Typography variant="body2" sx={{ fontWeight: 800 }}>
             {statusFeedback.title}

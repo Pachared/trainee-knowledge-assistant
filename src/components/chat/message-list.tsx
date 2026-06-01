@@ -20,8 +20,41 @@ type MessageListProps = {
   streaming?: boolean;
 };
 
+type CitationPreview = {
+  document: {
+    id: string;
+    title: string;
+    filename: string;
+    chunkCount: number;
+    chunks: Array<{
+      id: string;
+      chunkIndex: number;
+      pageNumber: number | null;
+      content: string;
+    }>;
+  };
+};
+
+async function fetchCitationPreview(citation: ApiCitation) {
+  if (!citation.documentId) {
+    return null;
+  }
+
+  const response = await fetch(`/api/documents/${citation.documentId}?chunkId=${encodeURIComponent(citation.chunkId)}`);
+  const payload = (await response.json()) as { ok: boolean; data?: CitationPreview; error?: { message?: string } };
+
+  if (!response.ok || !payload.ok || !payload.data) {
+    throw new Error(payload.error?.message || "โหลดตัวอย่างเอกสารไม่สำเร็จ");
+  }
+
+  return payload.data;
+}
+
 export function MessageList({ messages, streaming }: MessageListProps) {
   const [selectedCitation, setSelectedCitation] = useState<ApiCitation | null>(null);
+  const [citationPreview, setCitationPreview] = useState<CitationPreview | null>(null);
+  const [citationPreviewError, setCitationPreviewError] = useState("");
+  const [citationPreviewLoading, setCitationPreviewLoading] = useState(false);
   const citationFallback = useMemo(
     () =>
       new Map(
@@ -98,7 +131,18 @@ export function MessageList({ messages, streaming }: MessageListProps) {
                         type="button"
                         size="small"
                         variant="text"
-                        onClick={() => setSelectedCitation(citation)}
+                        onClick={() => {
+                          setSelectedCitation(citation);
+                          setCitationPreview(null);
+                          setCitationPreviewError("");
+                          setCitationPreviewLoading(true);
+                          void fetchCitationPreview(citation)
+                            .then((preview) => setCitationPreview(preview))
+                            .catch((error) =>
+                              setCitationPreviewError(error instanceof Error ? error.message : "โหลดตัวอย่างเอกสารไม่สำเร็จ")
+                            )
+                            .finally(() => setCitationPreviewLoading(false));
+                        }}
                         sx={{ minHeight: 28, px: 1, borderRadius: 999, color: "text.secondary" }}
                       >
                         อ้างอิง {citation.index}
@@ -112,7 +156,16 @@ export function MessageList({ messages, streaming }: MessageListProps) {
         })}
       </Stack>
 
-      <Dialog open={Boolean(selectedCitation)} onClose={() => setSelectedCitation(null)} fullWidth maxWidth="sm">
+      <Dialog
+        open={Boolean(selectedCitation)}
+        onClose={() => {
+          setSelectedCitation(null);
+          setCitationPreview(null);
+          setCitationPreviewError("");
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>แหล่งอ้างอิงจากเอกสาร</DialogTitle>
         <DialogContent>
           {selectedCitation ? (
@@ -121,7 +174,15 @@ export function MessageList({ messages, streaming }: MessageListProps) {
                 {selectedCitation.title}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {typeof selectedCitation.chunkIndex === "number" ? `ตำแหน่ง chunk ${selectedCitation.chunkIndex + 1}` : `chunk id: ${selectedCitation.chunkId}`}
+                {[
+                  typeof selectedCitation.pageNumber === "number" ? `หน้า ${selectedCitation.pageNumber}` : null,
+                  typeof selectedCitation.chunkIndex === "number" ? `chunk ${selectedCitation.chunkIndex + 1}` : `chunk id: ${selectedCitation.chunkId}`
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                ตัวอย่างด้านล่างคือข้อความต้นทางจากเอกสารที่ AI ใช้เป็น context
               </Typography>
               <Box
                 sx={{
@@ -135,9 +196,21 @@ export function MessageList({ messages, streaming }: MessageListProps) {
                 }}
               >
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                  {selectedCitation.excerpt || "ไม่มีข้อความตัวอย่างสำหรับแหล่งอ้างอิงนี้"}
+                  {citationPreviewLoading
+                    ? "กำลังโหลดตัวอย่างเอกสาร..."
+                    : citationPreview?.document.chunks[0]?.content || selectedCitation.excerpt || "ไม่มีข้อความตัวอย่างสำหรับแหล่งอ้างอิงนี้"}
                 </Typography>
               </Box>
+              {citationPreview?.document ? (
+                <Typography variant="caption" color="text.secondary">
+                  ไฟล์ {citationPreview.document.filename} · ทั้งหมด {citationPreview.document.chunkCount.toLocaleString()} chunks
+                </Typography>
+              ) : null}
+              {citationPreviewError ? (
+                <Typography variant="caption" color="warning.main">
+                  {citationPreviewError}
+                </Typography>
+              ) : null}
             </Stack>
           ) : null}
         </DialogContent>

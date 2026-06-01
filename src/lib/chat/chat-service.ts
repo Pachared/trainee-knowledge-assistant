@@ -153,6 +153,7 @@ export async function hydrateMessagesWithCitations<T extends MessageWithCitedChu
           documentId: chunk.document.id,
           title: chunk.document.title,
           chunkIndex: chunk.chunkIndex,
+          pageNumber: chunk.pageNumber,
           excerpt: chunk.content.slice(0, 700)
         };
       });

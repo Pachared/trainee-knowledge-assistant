@@ -4,6 +4,7 @@ type FallbackChunk = {
   id: string;
   content: string;
   chunkIndex: number;
+  pageNumber: number | null;
   document: {
     id: string;
     title: string;
@@ -65,6 +66,7 @@ export function rankFallbackChunks(chunks: FallbackChunk[], query: string, limit
         documentId: chunk.document.id,
         documentTitle: chunk.document.title,
         chunkIndex: chunk.chunkIndex,
+        pageNumber: chunk.pageNumber,
         content: chunk.content,
         score
       };

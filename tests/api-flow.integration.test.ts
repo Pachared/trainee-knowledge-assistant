@@ -99,6 +99,7 @@ type Routes = {
   chatPatch: (request: Request, context: { params: Promise<{ chatId: string }> }) => Promise<Response>;
   chatDelete: (request: Request, context: { params: Promise<{ chatId: string }> }) => Promise<Response>;
   uploadPost: (request: Request) => Promise<Response>;
+  documentGet: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   documentDelete: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   documentReindex: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   documentsReindex: (request: Request) => Promise<Response>;
@@ -155,7 +156,7 @@ async function prismaDocument(documentId: string) {
     where: { id: documentId },
     include: {
       chunks: {
-        select: { id: true }
+        select: { id: true, pageNumber: true }
       }
     }
   });
@@ -239,6 +240,7 @@ describe("knowledge assistant API flow", () => {
       chatPatch: chatActionsRoute.PATCH,
       chatDelete: chatActionsRoute.DELETE,
       uploadPost: uploadRoute.POST,
+      documentGet: documentActionsRoute.GET,
       documentDelete: documentActionsRoute.DELETE,
       documentReindex: documentReindexRoute.POST,
       documentsReindex: documentsReindexRoute.POST,
@@ -288,7 +290,9 @@ describe("knowledge assistant API flow", () => {
     expect(txtUpload.payload.data?.document.status).toBe("queued");
     const processedTxtDocument = await processUpload(routes, txtUpload);
     expect(processedTxtDocument.status).toMatch(/^ready/);
+    expect(processedTxtDocument.jobProgress).toBeGreaterThanOrEqual(90);
     expect(processedTxtDocument.chunks.length).toBeGreaterThan(0);
+    expect(processedTxtDocument.chunks[0]?.pageNumber).toBe(1);
     expect(processedTxtDocument.failedReason).toEqual(expect.any(String));
 
     const pdfFixture = await readFile(join(process.cwd(), "node_modules/pdf-parse/test/data/01-valid.pdf"));
@@ -303,8 +307,24 @@ describe("knowledge assistant API flow", () => {
     expect(pdfUpload.payload.data?.document.status).toBe("queued");
     const processedPdfDocument = await processUpload(routes, pdfUpload);
     expect(processedPdfDocument.status).toMatch(/^ready/);
+    expect(processedPdfDocument.jobProgress).toBeGreaterThanOrEqual(90);
     expect(processedPdfDocument.chunks.length).toBeGreaterThan(0);
+    expect(processedPdfDocument.chunks[0]?.pageNumber).toBe(1);
     expect(processedPdfDocument.failedReason).toEqual(expect.any(String));
+
+    const previewResponse = await routes.documentGet(
+      new Request(`http://test.local/api/documents/${txtUpload.payload.data?.document.id}?chunkId=${processedTxtDocument.chunks[0]?.id}`),
+      { params: Promise.resolve({ documentId: txtUpload.payload.data?.document.id ?? "" }) }
+    );
+    const previewPayload = await parseJson<{
+      document: {
+        chunkCount: number;
+        chunks: Array<{ id: string; pageNumber: number | null; content: string }>;
+      };
+    }>(previewResponse);
+    expect(previewResponse.status).toBe(200);
+    expect(previewPayload.data?.document.chunkCount).toBeGreaterThan(0);
+    expect(previewPayload.data?.document.chunks[0]?.pageNumber).toBe(1);
 
     const failedPdf = await uploadFile(
       routes,

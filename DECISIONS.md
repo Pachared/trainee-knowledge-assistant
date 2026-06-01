@@ -222,7 +222,43 @@ Docker Compose local ยังขึ้นกับ Docker Desktop state แล�
 
 ### Trade-offs
 
-ข้อดีคือเพิ่ม trust ให้คำตอบ AI และช่วย debug RAG ได้จริง ข้อเสียคือ excerpt ยังเป็นระดับ chunk ไม่ใช่ระดับหน้า PDF หรือ highlight ตำแหน่งจริง ถ้า project ไปต่อควรเพิ่ม PDF page extraction, page number metadata และ document preview ที่ jump ไปตำแหน่งอ้างอิงได้
+ข้อดีคือเพิ่ม trust ให้คำตอบ AI และช่วย debug RAG ได้จริง ข้อเสียในเวอร์ชันแรกคือ excerpt ยังเป็นระดับ chunk ไม่ใช่ตำแหน่งใน PDF โดยตรง หลังจากนั้นจึงเพิ่ม page metadata และ preview endpoint ใน Decision 15 เพื่อให้ dialog แสดงหน้าและโหลด chunk ต้นทางจริงได้ แต่ยังไม่ใช่ PDF viewer ที่ highlight ตำแหน่งบนไฟล์จริง
+
+## Decision 15: เพิ่ม job progress และ page metadata ใน schema เพื่อให้ UX ไม่เดาสถานะเอง
+
+### Context
+
+หลังมี upload polling แล้ว ผู้ใช้เห็นสถานะเอกสารดีขึ้น แต่ progress ยังเป็นค่าโดยประมาณจาก status เช่น `queued`, `processing`, `ready` เท่านั้น ซึ่งไม่ละเอียดพอเมื่อไฟล์ใหญ่หรือ Chroma/OpenAI ช้า อีกจุดคือ citation dialog แสดง excerpt ได้ แต่ยังไม่รู้หน้าเอกสาร ทำให้การตรวจสอบ PDF ยังไม่ชัดเท่าที่ควร
+
+### Alternatives Considered
+
+ทางเลือกแรกคือให้ UI เดาจาก status ต่อไป ซึ่งไม่ต้องเปลี่ยน database แต่ทำให้ข้อความไม่สะท้อนงานจริงของ worker ทางเลือกที่สองคือใช้ event stream หรือ queue dashboard เต็มรูปแบบ ซึ่งเหมาะกับ production ใหญ่แต่เกิน scope รอบนี้ ทางเลือกที่สามคือเพิ่ม field เบา ๆ ใน schema ได้แก่ `jobStage`, `jobProgress` และ `DocumentChunk.pageNumber`
+
+### Why schema-backed progress and page metadata
+
+เลือกเพิ่ม field ลง schema เพราะ worker เป็นคนรู้จริงว่ากำลังทำขั้นตอนไหน เช่น extracting, chunking, saving chunks, summarizing, embedding, reindexing, ready หรือ failed UI จึงอ่านค่าจาก database แล้วแสดง progress/step ได้แม่นกว่าเดิม ส่วน `pageNumber` ถูกผูกกับ chunk ตั้งแต่ตอน extract/chunk เอกสาร ทำให้ citation สามารถบอกหน้าและโหลด preview จาก `/api/documents/[documentId]?chunkId=...` ได้
+
+### Trade-offs
+
+ข้อดีคือ UX ชัดขึ้นโดยไม่ต้องเพิ่ม service ใหม่ และใช้กับ Docker Compose/SQLite ได้ทันที ข้อเสียคือ progress ยังเป็น step progress ไม่ใช่เปอร์เซ็นต์ละเอียดระดับจำนวน embeddings ที่เสร็จจริง ถ้าระบบรองรับไฟล์ใหญ่มากในอนาคตควรเพิ่ม progress ต่อ batch เช่น `embeddedChunks/totalChunks` และ PDF viewer ที่ highlight หน้า/ตำแหน่งจริง
+
+## Decision 16: Error recovery ต้องมีปุ่ม action เมื่อแก้ได้จาก UI
+
+### Context
+
+ข้อความ error ภาษาไทยช่วยให้ผู้ใช้เข้าใจปัญหาแล้ว แต่บางเคสยังต้องเดาเองว่าจะไปไหนต่อ เช่น OpenAI ใช้ไม่ได้, Chroma indexing fail หรือ upload error ถ้า UX หยุดที่ข้อความอย่างเดียว ผู้ใช้ยังรู้สึกว่าระบบเสีย
+
+### Alternatives Considered
+
+ทางเลือกแรกคือแสดงข้อความอย่างเดียว ซึ่งเรียบง่ายแต่ไม่ช่วยให้ผู้ใช้แก้ปัญหา ทางเลือกที่สองคือทำ wizard แก้ปัญหาเต็มรูปแบบ ซึ่งมากเกินไปสำหรับระบบนี้ ทางเลือกที่เหมาะคือให้ `status-feedback.ts` คืน action ที่เกี่ยวข้อง เช่น `เปิด Diagnostics` หรือ `ไปหน้าอัปโหลด` แล้วให้หน้า chat/upload แสดงปุ่ม action ใน alert
+
+### Why action-based recovery
+
+เลือก action-based recovery เพราะแก้ UX ที่เจอบ่อยโดยไม่ทำระบบซับซ้อน ผู้ใช้ที่เจอ OpenAI/quota/model error สามารถไปหน้า diagnostics ได้ทันที ส่วน Chroma/upload error สามารถกลับไปหน้าอัปโหลดเพื่อ re-index หรือลองอัปโหลดใหม่ได้
+
+### Trade-offs
+
+ข้อดีคือ flow ไม่ตันและใช้ component เดิมได้ ข้อเสียคือบางปัญหายังต้องแก้ภายนอก UI เช่น แก้ env, quota หรือ restart container ในอนาคตสามารถเพิ่มปุ่ม action ฝั่ง admin เช่น restart worker หรือ trigger reconcile Chroma จากหน้า diagnostics ได้
 
 ## Decision 9: ใช้ Redis rate limit พร้อม SQLite fallback
 

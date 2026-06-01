@@ -9,6 +9,7 @@ export type RetrievedContext = {
   documentId?: string;
   documentTitle: string;
   chunkIndex?: number;
+  pageNumber?: number | null;
   content: string;
   score: number;
 };
@@ -94,6 +95,7 @@ export async function retrieveContext(input: {
           documentId: chunk.document.id,
           documentTitle: chunk.document.title,
           chunkIndex: chunk.chunkIndex,
+          pageNumber: chunk.pageNumber,
           content: chunk.content,
           score: results.distances?.[0]?.[index] ?? 0
         };
@@ -162,6 +164,7 @@ export async function retrieveWholeDocumentContext(input: {
       chunkId: summary.id,
       documentId: summary.document.id,
       documentTitle: `${summary.document.title} - summary`,
+      pageNumber: null,
       content: summary.content,
       score: 0
     });
@@ -180,6 +183,7 @@ export async function retrieveWholeDocumentContext(input: {
       documentId: chunk.document.id,
       documentTitle: chunk.document.title,
       chunkIndex: chunk.chunkIndex,
+      pageNumber: chunk.pageNumber,
       content: chunk.content,
       score: 0
     });
