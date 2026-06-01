@@ -59,6 +59,9 @@ model Document {
   failedReason     String?
   jobStage         String?
   jobProgress      Int              @default(0)
+  totalChunks      Int              @default(0)
+  processedChunks  Int              @default(0)
+  embeddedChunks   Int              @default(0)
   indexingAttempts Int              @default(0)
   lockedBy         String?
   lockedAt         DateTime?

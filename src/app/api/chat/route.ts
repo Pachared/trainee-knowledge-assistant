@@ -84,6 +84,7 @@ export async function POST(request: Request) {
       title: context.documentTitle,
       chunkIndex: context.chunkIndex,
       pageNumber: context.pageNumber,
+      fileUrl: context.documentId ? `/api/documents/${context.documentId}/file` : undefined,
       excerpt: context.content.slice(0, 700)
     }));
     const prompt = buildAssistantPrompt(assistantInput);

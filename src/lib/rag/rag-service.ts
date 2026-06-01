@@ -25,25 +25,35 @@ export async function indexChunksInChroma(input: {
   userId: string;
   documentId: string;
   chunks: Array<{ id: string; chromaId: string; content: string; chunkIndex: number }>;
+  onProgress?: (embeddedChunks: number) => Promise<void> | void;
 }) {
   if (!input.chunks.length) {
     return;
   }
 
-  const embeddings = await embedTexts(input.chunks.map((chunk) => chunk.content));
   const collection = await getChromaCollection();
+  const batchSize = Math.max(1, getNumberEnv("CHROMA_INDEX_BATCH_SIZE", 32));
+  let embeddedChunks = 0;
 
-  await collection.add({
-    ids: input.chunks.map((chunk) => chunk.chromaId),
-    documents: input.chunks.map((chunk) => chunk.content),
-    embeddings,
-    metadatas: input.chunks.map((chunk) => ({
-      userId: input.userId,
-      documentId: input.documentId,
-      chunkId: chunk.id,
-      chunkIndex: chunk.chunkIndex
-    }))
-  });
+  for (let index = 0; index < input.chunks.length; index += batchSize) {
+    const batch = input.chunks.slice(index, index + batchSize);
+    const embeddings = await embedTexts(batch.map((chunk) => chunk.content));
+
+    await collection.add({
+      ids: batch.map((chunk) => chunk.chromaId),
+      documents: batch.map((chunk) => chunk.content),
+      embeddings,
+      metadatas: batch.map((chunk) => ({
+        userId: input.userId,
+        documentId: input.documentId,
+        chunkId: chunk.id,
+        chunkIndex: chunk.chunkIndex
+      }))
+    });
+
+    embeddedChunks += batch.length;
+    await input.onProgress?.(embeddedChunks);
+  }
 }
 
 export async function deleteDocumentFromChroma(documentId: string) {

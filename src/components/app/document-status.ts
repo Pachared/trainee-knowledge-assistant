@@ -55,17 +55,24 @@ function stageLabel(stage?: string | null) {
 }
 
 export function getDocumentStatusMeta(
-  document: Pick<ApiDocument, "status" | "failedReason" | "_count" | "jobStage" | "jobProgress">
+  document: Pick<ApiDocument, "status" | "failedReason" | "_count" | "jobStage" | "jobProgress" | "totalChunks" | "processedChunks" | "embeddedChunks">
 ): DocumentStatusMeta {
-  const chunks = document._count?.chunks ?? 0;
+  const chunks = document._count?.chunks ?? document.totalChunks ?? 0;
+  const totalChunks = document.totalChunks ?? chunks;
+  const processedChunks = document.processedChunks ?? 0;
+  const embeddedChunks = document.embeddedChunks ?? 0;
   const progress = typeof document.jobProgress === "number" ? document.jobProgress : undefined;
   const currentStage = stageLabel(document.jobStage);
+  const chunkProgress =
+    totalChunks > 0
+      ? `บันทึกแล้ว ${processedChunks.toLocaleString()}/${totalChunks.toLocaleString()} chunks · index แล้ว ${embeddedChunks.toLocaleString()}/${totalChunks.toLocaleString()} chunks`
+      : undefined;
 
   if (document.status === "ready") {
     return {
       label: "พร้อมใช้งาน",
       stepLabel: currentStage ? `ขั้นตอน 4/4: ${currentStage}` : "ขั้นตอน 4/4: พร้อมถามและสรุป",
-      helperText: `อ่านเอกสารแล้ว ${chunks.toLocaleString()} chunks และสร้างดัชนี Chroma สำเร็จ`,
+      helperText: chunkProgress || `อ่านเอกสารแล้ว ${chunks.toLocaleString()} chunks และสร้างดัชนี Chroma สำเร็จ`,
       nextStep: "เลือกเอกสารนี้ในหน้าแชทเพื่อถามหรือสรุปได้ทันที",
       progress: progress ?? 100,
       severity: "success",
@@ -78,7 +85,7 @@ export function getDocumentStatusMeta(
     return {
       label: "พร้อมใช้แบบสำรอง",
       stepLabel: currentStage ? `ขั้นตอน 4/4: ${currentStage}` : "ขั้นตอน 4/4: ใช้ SQLite fallback",
-      helperText: `อ่านเอกสารแล้ว ${chunks.toLocaleString()} chunks แต่ Chroma ยัง index ไม่สำเร็จ`,
+      helperText: chunkProgress || `อ่านเอกสารแล้ว ${chunks.toLocaleString()} chunks แต่ Chroma ยัง index ไม่สำเร็จ`,
       nextStep: reasonAdvice(document),
       progress: progress ?? 88,
       severity: "warning",
@@ -91,7 +98,7 @@ export function getDocumentStatusMeta(
     return {
       label: "กำลังประมวลผล",
       stepLabel: currentStage ? `กำลังทำงาน: ${currentStage}` : "ขั้นตอน 2/4: อ่านไฟล์และแบ่งเนื้อหา",
-      helperText: "worker กำลังอ่านข้อความ แบ่ง chunks สร้าง summary และเตรียมส่งเข้า Chroma",
+      helperText: chunkProgress || "worker กำลังอ่านข้อความ แบ่ง chunks สร้าง summary และเตรียมส่งเข้า Chroma",
       nextStep: "รอสักครู่ หน้านี้จะอัปเดตสถานะให้อัตโนมัติ",
       progress: progress ?? 56,
       severity: "info",

@@ -100,12 +100,15 @@ type Routes = {
   chatDelete: (request: Request, context: { params: Promise<{ chatId: string }> }) => Promise<Response>;
   uploadPost: (request: Request) => Promise<Response>;
   documentGet: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
+  documentFileGet: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   documentDelete: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   documentReindex: (request: Request, context: { params: Promise<{ documentId: string }> }) => Promise<Response>;
   documentsReindex: (request: Request) => Promise<Response>;
   chatPost: (request: Request) => Promise<Response>;
   usageGet: () => Promise<Response>;
   adminDiagnosticsGet: () => Promise<Response>;
+  adminJobsGet: () => Promise<Response>;
+  adminJobsPost: (request: Request) => Promise<Response>;
   adminReconcileChromaPost: () => Promise<Response>;
   processDocument: (documentId: string) => Promise<unknown>;
 };
@@ -155,7 +158,7 @@ async function prismaDocument(documentId: string) {
   return prisma.document.findUniqueOrThrow({
     where: { id: documentId },
     include: {
-      chunks: {
+        chunks: {
         select: { id: true, pageNumber: true }
       }
     }
@@ -209,11 +212,13 @@ describe("knowledge assistant API flow", () => {
       chatActionsRoute,
       uploadRoute,
       documentActionsRoute,
+      documentFileRoute,
       documentReindexRoute,
       documentsReindexRoute,
       chatRoute,
       usageRoute,
       adminDiagnosticsRoute,
+      adminJobsRoute,
       adminReconcileChromaRoute,
       documentService,
       db
@@ -224,11 +229,13 @@ describe("knowledge assistant API flow", () => {
       import("@/app/api/chats/[chatId]/route"),
       import("@/app/api/upload/route"),
       import("@/app/api/documents/[documentId]/route"),
+      import("@/app/api/documents/[documentId]/file/route"),
       import("@/app/api/documents/[documentId]/reindex/route"),
       import("@/app/api/documents/reindex/route"),
       import("@/app/api/chat/route"),
       import("@/app/api/usage/route"),
       import("@/app/api/admin/diagnostics/route"),
+      import("@/app/api/admin/jobs/route"),
       import("@/app/api/admin/reconcile-chroma/route"),
       import("@/lib/documents/document-service"),
       import("@/lib/db/prisma")
@@ -241,12 +248,15 @@ describe("knowledge assistant API flow", () => {
       chatDelete: chatActionsRoute.DELETE,
       uploadPost: uploadRoute.POST,
       documentGet: documentActionsRoute.GET,
+      documentFileGet: documentFileRoute.GET,
       documentDelete: documentActionsRoute.DELETE,
       documentReindex: documentReindexRoute.POST,
       documentsReindex: documentsReindexRoute.POST,
       chatPost: chatRoute.POST,
       usageGet: usageRoute.GET,
       adminDiagnosticsGet: adminDiagnosticsRoute.GET,
+      adminJobsGet: adminJobsRoute.GET,
+      adminJobsPost: adminJobsRoute.POST,
       adminReconcileChromaPost: adminReconcileChromaRoute.POST,
       processDocument: documentService.processDocument
     };
@@ -291,6 +301,11 @@ describe("knowledge assistant API flow", () => {
     const processedTxtDocument = await processUpload(routes, txtUpload);
     expect(processedTxtDocument.status).toMatch(/^ready/);
     expect(processedTxtDocument.jobProgress).toBeGreaterThanOrEqual(90);
+    expect(processedTxtDocument.totalChunks).toBe(processedTxtDocument.chunks.length);
+    expect(processedTxtDocument.processedChunks).toBe(processedTxtDocument.chunks.length);
+    expect(processedTxtDocument.embeddedChunks).toBe(
+      processedTxtDocument.status === "ready" ? processedTxtDocument.chunks.length : 0
+    );
     expect(processedTxtDocument.chunks.length).toBeGreaterThan(0);
     expect(processedTxtDocument.chunks[0]?.pageNumber).toBe(1);
     expect(processedTxtDocument.failedReason).toEqual(expect.any(String));
@@ -326,6 +341,14 @@ describe("knowledge assistant API flow", () => {
     expect(previewPayload.data?.document.chunkCount).toBeGreaterThan(0);
     expect(previewPayload.data?.document.chunks[0]?.pageNumber).toBe(1);
 
+    const fileResponse = await routes.documentFileGet(
+      new Request(`http://test.local/api/documents/${txtUpload.payload.data?.document.id}/file`),
+      { params: Promise.resolve({ documentId: txtUpload.payload.data?.document.id ?? "" }) }
+    );
+    expect(fileResponse.status).toBe(200);
+    expect(fileResponse.headers.get("Content-Type")).toContain("text/plain");
+    expect(await fileResponse.text()).toContain("Prisma SQLite Chroma");
+
     const failedPdf = await uploadFile(
       routes,
       new File([Buffer.from("%PDF-1.4\nbroken pdf content")], "broken.pdf", {
@@ -345,6 +368,37 @@ describe("knowledge assistant API flow", () => {
     expect(storedFailedPdf.status).toBe("failed");
     expect(storedFailedPdf.failedReason).toEqual(expect.any(String));
     expect(storedFailedPdf.failedReason?.length).toBeGreaterThan(0);
+
+    const jobsResponse = await routes.adminJobsGet();
+    const jobsPayload = await parseJson<{
+      jobs: Array<{
+        id: string;
+        status: string;
+        jobStage?: string | null;
+        jobProgress: number;
+        totalChunks: number;
+        processedChunks: number;
+        embeddedChunks: number;
+      }>;
+    }>(jobsResponse);
+
+    expect(jobsResponse.status).toBe(200);
+    expect(jobsPayload.data?.jobs.some((job) => job.id === storedFailedPdf.id && job.status === "failed")).toBe(true);
+
+    const retryJobResponse = await routes.adminJobsPost(
+      new Request("http://test.local/api/admin/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "retry", documentId: storedFailedPdf.id })
+      })
+    );
+    const retryJobPayload = await parseJson<{ job: { id: string; status: string; jobStage?: string | null; jobProgress: number } }>(
+      retryJobResponse
+    );
+
+    expect(retryJobResponse.status).toBe(200);
+    expect(retryJobPayload.data?.job.status).toBe("queued");
+    expect(retryJobPayload.data?.job.jobStage).toBe("retry_waiting");
 
     const reindexResponse = await routes.documentReindex(
       new Request(`http://test.local/api/documents/${txtUpload.payload.data?.document.id}/reindex`, {

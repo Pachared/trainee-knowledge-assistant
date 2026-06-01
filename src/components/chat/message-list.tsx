@@ -11,6 +11,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import OpenInNewOutlinedIcon from "@mui/icons-material/OpenInNewOutlined";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 import TollOutlinedIcon from "@mui/icons-material/TollOutlined";
 import type { ApiCitation, ApiMessage } from "@/components/app/types";
@@ -25,6 +26,8 @@ type CitationPreview = {
     id: string;
     title: string;
     filename: string;
+    mimeType: string;
+    fileUrl: string;
     chunkCount: number;
     chunks: Array<{
       id: string;
@@ -184,6 +187,21 @@ export function MessageList({ messages, streaming }: MessageListProps) {
               <Typography variant="caption" color="text.secondary">
                 ตัวอย่างด้านล่างคือข้อความต้นทางจากเอกสารที่ AI ใช้เป็น context
               </Typography>
+              {citationPreview?.document.mimeType === "application/pdf" && citationPreview.document.fileUrl ? (
+                <Box
+                  component="iframe"
+                  title={`PDF preview ${citationPreview.document.filename}`}
+                  src={`${citationPreview.document.fileUrl}#page=${selectedCitation.pageNumber ?? 1}`}
+                  sx={{
+                    width: "100%",
+                    height: { xs: 260, sm: 360 },
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 2,
+                    bgcolor: "background.default"
+                  }}
+                />
+              ) : null}
               <Box
                 sx={{
                   border: 1,
@@ -202,9 +220,21 @@ export function MessageList({ messages, streaming }: MessageListProps) {
                 </Typography>
               </Box>
               {citationPreview?.document ? (
-                <Typography variant="caption" color="text.secondary">
-                  ไฟล์ {citationPreview.document.filename} · ทั้งหมด {citationPreview.document.chunkCount.toLocaleString()} chunks
-                </Typography>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
+                  <Typography variant="caption" color="text.secondary">
+                    ไฟล์ {citationPreview.document.filename} · ทั้งหมด {citationPreview.document.chunkCount.toLocaleString()} chunks
+                  </Typography>
+                  <Button
+                    href={`${citationPreview.document.fileUrl}#page=${selectedCitation.pageNumber ?? 1}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    size="small"
+                    startIcon={<OpenInNewOutlinedIcon fontSize="small" />}
+                    sx={{ borderRadius: 999 }}
+                  >
+                    เปิดไฟล์ต้นฉบับ
+                  </Button>
+                </Stack>
               ) : null}
               {citationPreviewError ? (
                 <Typography variant="caption" color="warning.main">

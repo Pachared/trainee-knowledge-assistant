@@ -260,6 +260,60 @@ Docker Compose local ยังขึ้นกับ Docker Desktop state แล�
 
 ข้อดีคือ flow ไม่ตันและใช้ component เดิมได้ ข้อเสียคือบางปัญหายังต้องแก้ภายนอก UI เช่น แก้ env, quota หรือ restart container ในอนาคตสามารถเพิ่มปุ่ม action ฝั่ง admin เช่น restart worker หรือ trigger reconcile Chroma จากหน้า diagnostics ได้
 
+## Decision 17: ใช้ protected file preview + native PDF iframe แทนเพิ่ม PDF viewer dependency
+
+### Context
+
+หลัง citation dialog แสดง excerpt และ page number ได้แล้ว ผู้ใช้ยังต้องการตรวจเอกสารต้นฉบับได้ชัดขึ้น โดยเฉพาะ PDF ที่ควรเปิดดูหน้าที่ถูกอ้างอิง ไม่ใช่ดูแค่ข้อความ chunk ในกล่อง dialog อย่างเดียว
+
+### Alternatives Considered
+
+ทางเลือกแรกคือเพิ่ม PDF.js หรือ viewer library เต็มรูปแบบ ซึ่งทำ highlight ได้ละเอียด แต่เพิ่ม dependency และงาน tuning เยอะ ทางเลือกที่สองคือให้ผู้ใช้ดาวน์โหลดไฟล์เอง ซึ่งปลอดภัยแต่ UX ขาดช่วง ทางเลือกที่สามคือเพิ่ม protected file endpoint แล้วฝัง native browser PDF viewer ใน dialog พร้อม fragment `#page=...`
+
+### Why protected native preview
+
+เลือก protected file preview เพราะเข้ากับ Next.js API Routes เดิม ใช้ session เดิมตรวจสิทธิ์ และไม่ต้องเพิ่ม package ใหม่ ระบบจึงเปิด `/api/documents/[documentId]/file` ได้เฉพาะเจ้าของเอกสาร ส่วน citation dialog ใช้ file URL เดียวกันเพื่อแสดง PDF preview หรือเปิดไฟล์ต้นฉบับใน tab ใหม่
+
+### Trade-offs
+
+ข้อดีคือ UX ดีขึ้นทันทีและยังรักษา protected route ไว้ ข้อเสียคือ native PDF viewer รองรับ highlight ไม่เท่ากันในแต่ละ browser และยังไม่รู้ตำแหน่ง pixel ของข้อความจริง ถ้าต้องการตรวจแบบละเอียดควรเพิ่ม PDF.js พร้อม text layer mapping และ highlight จาก chunk/page offsets
+
+## Decision 18: เพิ่ม progress ต่อ chunk และ admin job monitor แทนการเดาจาก status อย่างเดียว
+
+### Context
+
+`jobStage` และ `jobProgress` ช่วยให้ UI รู้ขั้นตอนแล้ว แต่ไฟล์ใหญ่ยังดูไม่ชัดว่าเสร็จไปกี่ chunks และผู้ดูแลยังไม่มีหน้าเห็น job แต่ละรายการว่าค้าง, retry, fail หรือ index เข้า Chroma ไปเท่าไร
+
+### Alternatives Considered
+
+ทางเลือกแรกคือใช้ progress เดิมต่อไป ซึ่งง่ายแต่ไม่พอสำหรับไฟล์ใหญ่ ทางเลือกที่สองคือใช้ queue system เต็มรูปแบบ เช่น BullMQ ซึ่งดีสำหรับ production ใหญ่แต่เกิน scope รอบนี้ ทางเลือกที่สามคือเพิ่ม field ใน `Document` ได้แก่ `totalChunks`, `processedChunks`, `embeddedChunks` และเพิ่ม `/api/admin/jobs` สำหรับ monitor/retry/cancel
+
+### Why schema-backed chunk progress
+
+เลือก schema-backed progress เพราะ worker เป็นคนรู้จำนวน chunks และสามารถอัปเดตระหว่างบันทึก chunks กับ embedding batch ได้โดยตรง หน้า upload และ admin จึงแสดงข้อมูลที่สัมพันธ์กับงานจริง ส่วน admin job monitor ทำให้ผู้ดูแลกดส่งงานกลับเข้าคิว, ยกเลิกงานที่ยังรัน หรือ reconcile Chroma ได้จาก UI โดยไม่ต้องเรียก API เอง
+
+### Trade-offs
+
+ข้อดีคือ debug ง่ายขึ้นมากและยังรันด้วย Docker Compose เดียวได้ ข้อเสียคือยังเป็น polling + DB state ไม่ใช่ queue event stream จริง ถ้าปริมาณงานสูงขึ้นควรย้ายไป Redis queue พร้อม dead-letter queue, per-job logs และ progress event แบบ realtime
+
+## Decision 19: ใช้ BM25-lite + Thai n-gram fallback และ hierarchical summary cache
+
+### Context
+
+เมื่อ Chroma ใช้งานไม่ได้ ระบบต้อง fallback ไป SQLite search เดิมที่ดีขึ้นแล้วแต่ยังมีจุดอ่อนกับภาษาไทยที่ไม่มีเว้นวรรค และการสรุปเอกสารยาวยังควรอ่านเป็นหมวดหมู่มากกว่ารายการ chunk ต่อกัน
+
+### Alternatives Considered
+
+ทางเลือกแรกคือใช้ SQLite `LIKE` หรือ ranking เดิมต่อไป ซึ่งทำง่ายแต่ภาษาไทยและเอกสารยาวยังไม่ดีพอ ทางเลือกที่สองคือเพิ่ม SQLite FTS5/BM25 เต็มรูปแบบ ซึ่งแม่นกว่าแต่ต้องจัดการ virtual table/migration/triggers เพิ่ม ทางเลือกที่สามคือปรับ fallback ranking ใน service ให้เป็น BM25-lite และเพิ่ม Thai character n-gram พร้อมปรับ summary cache ให้แบ่งเอกสารเป็นช่วงตามลำดับและช่วงหน้า
+
+### Why lightweight search and summary improvements
+
+เลือกแนว lightweight เพราะไม่เพิ่ม service/dependency และยังทดสอบง่าย ระบบ tokenizes คำทั่วไปและเพิ่ม n-gram สำหรับภาษาไทยเพื่อให้ query อย่าง “อัปโหลดเอกสาร” match เนื้อหาที่ไม่มีช่องว่างได้ ส่วน summary cache เปลี่ยนจาก list chunk ยาว ๆ เป็น Markdown sections เช่น ภาพรวม, รายละเอียดตามช่วงเอกสาร และข้อสรุป ทำให้ OpenAI ได้ context ที่เป็นระเบียบกว่าเดิม
+
+### Trade-offs
+
+ข้อดีคือ fallback และ summary อ่านดีขึ้นทันทีโดยไม่เพิ่ม infrastructure ข้อเสียคือยังไม่เท่า vector search หรือ FTS5 ที่มี tokenizer เฉพาะภาษา ถ้าระบบต้องค้นภาษาไทยจำนวนมากควรเพิ่ม FTS/BM25 จริงหรือ search engine แยก และถ้าเอกสารใหญ่มากควรใช้ LLM map-reduce หลาย call แทน summary cache แบบ extractive อย่างเดียว
+
 ## Decision 9: ใช้ Redis rate limit พร้อม SQLite fallback
 
 ### Context

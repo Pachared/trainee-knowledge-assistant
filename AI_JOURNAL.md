@@ -217,3 +217,11 @@
 **AI Response:** เพิ่ม migration สำหรับ `Document.jobStage`, `Document.jobProgress` และ `DocumentChunk.pageNumber`, ปรับ PDF/TXT extraction ให้คืน page metadata, เพิ่ม `chunkTextPages` เพื่อให้ chunks รักษาเลขหน้า, ให้ worker อัปเดต stage/progress ระหว่าง extracting, chunking, saving chunks, summarizing, embedding/re-indexing และ ready/fallback/failed, เพิ่ม `/api/documents/[documentId]?chunkId=...` สำหรับ citation preview, ปรับ citation dialog ให้โหลดข้อความ chunk จริงพร้อมแสดงหน้าและจำนวน chunks, เพิ่ม recovery action ใน error/status alert เช่นเปิด Diagnostics หรือไปหน้าอัปโหลด และเพิ่ม mobile e2e สำหรับ composer controls
 
 **My Adjustment:** ผู้ใช้ต้องการปิด UX/UI ที่จำเป็นจริง ๆ ให้ครบ จึงตรวจด้วย lint, unit/integration tests, production build และจะรัน Playwright e2e/Docker/Browser ก่อน push เพื่อยืนยันว่า UX ใช้งานได้ปกติทั้ง desktop และ mobile
+
+## Session 28: ทำ UX/Logic ข้อ 2-8 ให้ไปไกลขึ้น
+
+**Prompt:** ทำข้อที่ 2-8 จาก audit ได้แก่ PDF citation viewer, progress ต่อ chunk, admin job monitor, fallback search ที่ดีกว่า, hierarchical summary, mobile regression, recovery action จาก admin และอัปเดต README/AI_JOURNAL/DECISIONS พร้อม push
+
+**AI Response:** เพิ่ม `totalChunks`, `processedChunks`, `embeddedChunks` ใน schema และ migration เพื่อให้ worker บอกความคืบหน้าต่อ chunk ได้จริงขึ้น, เปลี่ยน Chroma indexing เป็น batch พร้อม callback อัปเดต progress, เพิ่ม protected file endpoint `/api/documents/[documentId]/file`, ปรับ citation dialog ให้เปิดไฟล์ต้นฉบับและฝัง PDF preview ไปยังหน้าที่อ้างอิง, เพิ่ม `/api/admin/jobs` และ Job Monitor ในหน้า admin สำหรับดูคิวงาน retry/cancel/reconcile, ปรับ fallback search เป็น BM25-lite ที่รองรับภาษาไทยแบบ character n-gram และปรับ summary cache ให้จัดกลุ่มเอกสารยาวเป็น hierarchical sections พร้อมช่วงหน้า
+
+**My Adjustment:** ผู้ใช้ต้องการให้ระบบใช้งานจริงและตรวจซ้ำ จึงเพิ่ม test ก่อนแก้ code สำหรับ summary, fallback search, admin jobs, file preview และ progress fields จากนั้นรัน unit/integration, lint, build และเตรียมรัน Playwright/Docker ก่อน commit/push

@@ -12,6 +12,8 @@ import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { getAdminDiagnostics } from "@/lib/admin/diagnostics";
+import { listDocumentJobs } from "@/lib/documents/document-service";
+import { JobMonitor } from "@/components/app/job-monitor";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -167,8 +169,15 @@ function DiagnosticCard({ title, status, rows, message, nextStep }: DiagnosticCa
 }
 
 export default async function AdminPage() {
-  await requireCurrentUser();
-  const diagnostics = await getAdminDiagnostics();
+  const user = await requireCurrentUser();
+  const [diagnostics, jobs] = await Promise.all([getAdminDiagnostics(), listDocumentJobs(user.id)]);
+  const clientJobs = jobs.map((job) => ({
+    ...job,
+    lockedAt: job.lockedAt?.toISOString() ?? null,
+    nextAttemptAt: job.nextAttemptAt?.toISOString() ?? null,
+    lastIndexedAt: job.lastIndexedAt?.toISOString() ?? null,
+    updatedAt: job.updatedAt.toISOString()
+  }));
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default", py: { xs: 3, md: 5 } }}>
@@ -273,6 +282,7 @@ export default async function AdminPage() {
               />
             </Box>
           </Box>
+          <JobMonitor initialJobs={clientJobs} />
         </Stack>
       </Container>
     </Box>

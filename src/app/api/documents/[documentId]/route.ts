@@ -39,6 +39,10 @@ export async function GET(request: Request, context: RouteContext) {
         failedReason: document.failedReason,
         jobStage: document.jobStage,
         jobProgress: document.jobProgress,
+        totalChunks: document.totalChunks,
+        processedChunks: document.processedChunks,
+        embeddedChunks: document.embeddedChunks,
+        fileUrl: `/api/documents/${document.id}/file`,
         chunks: document.chunks.map((chunk) => ({
           id: chunk.id,
           chunkIndex: chunk.chunkIndex,

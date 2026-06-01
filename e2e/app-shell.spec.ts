@@ -138,6 +138,8 @@ test.describe("admin diagnostics", () => {
     await expect(page.getByRole("heading", { name: "ฐานข้อมูล" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "ภาพรวมการทำงาน" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "โฟลเดอร์อัปโหลด" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "คิวประมวลผลเอกสาร" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reconcile" })).toBeVisible();
   });
 });
 
@@ -307,6 +309,7 @@ test.describe("document summary shortcut", () => {
     await page.getByRole("button", { name: "อ้างอิง 1" }).click();
     await expect(page.getByRole("dialog", { name: "แหล่งอ้างอิงจากเอกสาร" })).toContainText("Citation source text from uploaded document.");
     await expect(page.getByRole("dialog", { name: "แหล่งอ้างอิงจากเอกสาร" })).toContainText("หน้า 1");
+    await expect(page.getByRole("link", { name: "เปิดไฟล์ต้นฉบับ" })).toBeVisible();
   });
 });
 
@@ -354,5 +357,24 @@ test.describe("mobile drawer", () => {
     await expect(page.getByRole("button", { name: "ส่งข้อความ" })).toBeEnabled();
     await page.getByLabel("เลือกเอกสารสำหรับ RAG").click();
     await expect(page.getByRole("listbox")).toBeVisible();
+  });
+
+  test("keeps upload, usage, and admin recovery screens usable on mobile", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "mobile-only secondary screen assertion");
+
+    await login(page);
+
+    await page.goto("/upload");
+    await expect(page.getByRole("heading", { name: "อัปโหลดเอกสาร" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "เลือกไฟล์ PDF/TXT" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /สร้างดัชนีใหม่/ })).toBeVisible();
+
+    await page.goto("/usage");
+    await expect(page.getByRole("heading", { name: "การใช้งานโทเคน" })).toBeVisible();
+
+    await page.goto("/admin");
+    await expect(page.getByRole("heading", { name: "ตรวจสถานะระบบ" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "คิวประมวลผลเอกสาร" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "รีเฟรช" })).toBeVisible();
   });
 });

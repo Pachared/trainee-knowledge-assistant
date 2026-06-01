@@ -40,4 +40,30 @@ describe("rankFallbackChunks", () => {
     expect(ranked).toHaveLength(2);
     expect(ranked.every((item) => item.score === 0)).toBe(true);
   });
+
+  it("can rank Thai text without spaces by using character n-gram overlap", () => {
+    const ranked = rankFallbackChunks(
+      [
+        {
+          id: "thai-a",
+          content: "ระบบอัปโหลดเอกสารและสร้างดัชนีสำหรับถามตอบ",
+          chunkIndex: 0,
+          pageNumber: 1,
+          document: { id: "doc-thai-a", title: "คู่มือเอกสาร" }
+        },
+        {
+          id: "thai-b",
+          content: "รายงานยอดขายรายเดือนและใบแจ้งหนี้",
+          chunkIndex: 1,
+          pageNumber: 2,
+          document: { id: "doc-thai-b", title: "บัญชี" }
+        }
+      ],
+      "อัปโหลดเอกสาร",
+      1
+    );
+
+    expect(ranked[0]?.chunkId).toBe("thai-a");
+    expect(ranked[0]?.score).toBeGreaterThan(0);
+  });
 });

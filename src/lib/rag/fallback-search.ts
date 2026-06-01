@@ -19,6 +19,24 @@ function tokenize(text: string) {
     .filter((term) => term.length >= 2);
 }
 
+function charNgrams(text: string, size = 3) {
+  const compact = text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  const grams: string[] = [];
+
+  for (let index = 0; index <= compact.length - size; index += 1) {
+    grams.push(compact.slice(index, index + size));
+  }
+
+  return grams;
+}
+
+function searchTerms(text: string, unique = true) {
+  const terms = tokenize(text);
+  const grams = /[\u0E00-\u0E7F]/.test(text) ? charNgrams(text) : [];
+  const allTerms = [...terms, ...grams];
+  return unique ? Array.from(new Set(allTerms)) : allTerms;
+}
+
 function termFrequency(tokens: string[]) {
   const frequencies = new Map<string, number>();
   for (const token of tokens) {
@@ -28,11 +46,12 @@ function termFrequency(tokens: string[]) {
 }
 
 export function rankFallbackChunks(chunks: FallbackChunk[], query: string, limit: number): RetrievedContext[] {
-  const queryTerms = Array.from(new Set(tokenize(query)));
+  const queryTerms = searchTerms(query);
   const fallbackTerms = queryTerms.length ? queryTerms : [query.toLowerCase().trim()].filter(Boolean);
   const documentFrequency = new Map<string, number>();
   const tokenized = chunks.map((chunk) => {
-    const tokens = tokenize(`${chunk.document.title} ${chunk.content}`);
+    const haystack = `${chunk.document.title} ${chunk.content}`;
+    const tokens = searchTerms(haystack, false);
     const frequencies = termFrequency(tokens);
     const uniqueTerms = new Set(tokens);
 

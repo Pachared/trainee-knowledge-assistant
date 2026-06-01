@@ -154,6 +154,7 @@ export async function hydrateMessagesWithCitations<T extends MessageWithCitedChu
           title: chunk.document.title,
           chunkIndex: chunk.chunkIndex,
           pageNumber: chunk.pageNumber,
+          fileUrl: `/api/documents/${chunk.document.id}/file`,
           excerpt: chunk.content.slice(0, 700)
         };
       });

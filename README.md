@@ -83,13 +83,13 @@ npm run test:docker:rag
 - [x] Extract text จาก PDF/TXT
 - [x] Chunk เอกสารพร้อม token estimate
 - [x] Background document worker พร้อม job lock, retry/backoff และ stale lock recovery
-- [x] Summary cache ต่อเอกสารด้วย `DocumentSummary`
+- [x] Summary cache ต่อเอกสารด้วย `DocumentSummary` แบบ hierarchical section summary
 - [x] Embedding ด้วย OpenAI หรือ deterministic fallback เมื่อไม่มี key
 - [x] Index chunks เข้า Chroma
 - [x] Chat with AI ด้วย OpenAI Responses API
 - [x] Chat with uploaded document context
 - [x] RAG retrieval จาก Chroma
-- [x] SQLite fallback search แบบ ranking หลายคำ เมื่อ Chroma ใช้งานไม่ได้
+- [x] SQLite fallback search แบบ BM25-lite + Thai character n-gram เมื่อ Chroma ใช้งานไม่ได้
 - [x] สรุปทั้งเอกสารแบบละเอียดเมื่อผู้ใช้เลือกเอกสารและถามแนว “สรุปทั้งหมด”
 - [x] ปุ่มสรุปเอกสารใน composer ที่บังคับเลือกเอกสารก่อน และส่ง `documentId` เข้า summary flow
 - [x] Citation metadata จาก chunks ที่ใช้ตอบ
@@ -111,9 +111,12 @@ npm run test:docker:rag
 - [x] Upload polling แสดงสถานะเอกสารที่กำลังประมวลผล
 - [x] Document status UX แบบ step/progress พร้อมวิธีแก้เมื่อเอกสารผิดพลาด
 - [x] Worker progress fields (`jobStage`, `jobProgress`) เพื่อให้ UI แสดงขั้นตอนจริงมากขึ้น
+- [x] Chunk progress fields (`totalChunks`, `processedChunks`, `embeddedChunks`) เพื่อแสดงงานต่อ chunk
 - [x] Document picker ในหน้า chat ที่ค้นหาไฟล์ได้ แยกเอกสารพร้อมใช้งานและยังไม่พร้อม
-- [x] แสดงเอกสารที่ AI กำลังใช้ตอบ และเปิด citation เพื่อดูข้อความต้นทาง/หน้า PDF ได้
+- [x] แสดงเอกสารที่ AI กำลังใช้ตอบ และเปิด citation เพื่อดูข้อความต้นทาง/preview ไฟล์ต้นฉบับได้
 - [x] Citation preview endpoint สำหรับโหลด chunk ต้นทางจากเอกสารย้อนหลัง
+- [x] Protected file preview endpoint สำหรับเปิด PDF/TXT ต้นฉบับจาก citation
+- [x] Admin job monitor สำหรับดู queued/processing/failed/retry และสั่ง retry/cancel/reconcile
 - [x] Empty state พร้อมปุ่ม action ในหน้า chat, upload และ usage
 - [x] Admin diagnostics และ error alert แสดง next step พร้อมปุ่มไปหน้าที่เกี่ยวข้อง
 
@@ -140,7 +143,7 @@ Browser / MUI UI
 - `src/theme`: MUI theme, palette, typography และ component defaults
 - `src/lib/auth`: login, session, current user
 - `src/lib/documents`: upload, file storage, PDF/TXT extraction, document lifecycle, job lock/retry
-- `src/lib/rag`: chunk retrieval, fallback search, summary cache helpers, Chroma client, embeddings
+- `src/lib/rag`: chunk retrieval, BM25-lite fallback search, summary cache helpers, Chroma client, embeddings
 - `src/lib/ai`: OpenAI client, prompt builder, streaming response, token usage
 - `src/lib/security`: Redis/SQLite rate limit, quota, input sanitization
 - `src/lib/admin`: diagnostics checks
@@ -178,7 +181,7 @@ Accent: #84CC16
 
 หลัง upload สำเร็จ UI จะบอกว่าระบบกำลังประมวลผลเอกสาร และหน้าแอปจะ polling สถานะเอกสารที่ยังเป็น `queued` หรือ `processing` ทุก 3 วินาที จนเอกสารเปลี่ยนเป็น `ready`, `ready_without_chroma` หรือ `failed`
 
-หน้า upload แสดงสถานะเอกสารแบบอ่านง่ายเป็น step/progress โดยอ่านจาก `jobStage` และ `jobProgress` ที่ worker อัปเดตระหว่างทำงาน:
+หน้า upload แสดงสถานะเอกสารแบบอ่านง่ายเป็น step/progress โดยอ่านจาก `jobStage`, `jobProgress`, `totalChunks`, `processedChunks` และ `embeddedChunks` ที่ worker อัปเดตระหว่างทำงาน:
 
 - `รอประมวลผล`: รับไฟล์แล้วและรอ worker
 - `กำลังประมวลผล`: worker กำลังอ่านข้อความ แบ่ง chunks บันทึก chunks สร้าง summary cache และเตรียม index
@@ -190,9 +193,11 @@ Accent: #84CC16
 
 worker จะ claim งานจากเอกสารสถานะ `queued` โดยใช้ lock metadata เช่น `lockedBy`, `lockedAt`, `nextAttemptAt` จากนั้น parse PDF/TXT, split เป็น chunks, สร้าง summary cache, สร้าง embeddings และ index เข้า Chroma ถ้า parse fail แบบถาวร เช่น PDF เสีย จะเป็น `failed` พร้อม `failedReason` ถ้า Chroma fail จะเป็น `ready_without_chroma` และ retry ตาม backoff
 
+ระหว่างทำงาน worker จะบันทึกจำนวน chunks ทั้งหมด, chunks ที่บันทึกลง SQLite แล้ว และ chunks ที่ index เข้า Chroma แล้ว ทำให้หน้า upload/admin เห็นความคืบหน้าที่สัมพันธ์กับงานจริงมากกว่าเดิม โดยเฉพาะไฟล์ที่มีหลาย chunks
+
 ### 4. Index to Chroma
 
-ระบบสร้าง embeddings ให้ chunks แล้วส่งเข้า Chroma พร้อม metadata เช่น `userId`, `documentId`, `chunkId`, `chunkIndex` ถ้า Chroma ใช้งานไม่ได้ ระบบยังคงมี chunks ใน SQLite และใช้ fallback search แบบ ranking หลายคำแทนการค้นแค่ keyword แรก
+ระบบสร้าง embeddings ให้ chunks แบบ batch แล้วส่งเข้า Chroma พร้อม metadata เช่น `userId`, `documentId`, `chunkId`, `chunkIndex` ถ้า Chroma ใช้งานไม่ได้ ระบบยังคงมี chunks ใน SQLite และใช้ fallback search แบบ BM25-lite พร้อม Thai character n-gram แทนการค้นแค่ keyword แรก
 
 ### 5. Chat
 
@@ -202,15 +207,15 @@ worker จะ claim งานจากเอกสารสถานะ `queued`
 
 หน้า chat มี document picker แบบค้นหาได้ ผู้ใช้เลือกไฟล์เฉพาะเพื่อถาม/สรุป หรือปล่อยว่างเพื่อให้ระบบค้นจากทุกเอกสารที่พร้อมใช้งานได้ ถ้าเลือกเอกสารแล้ว UI จะแสดงแถบ “กำลังถามจาก” พร้อมสถานะของไฟล์ เพื่อป้องกันการถามผิดเอกสารเมื่อมีหลายไฟล์
 
-เมื่อ AI ตอบพร้อม citation ระบบจะแสดงปุ่ม `อ้างอิง` ใต้คำตอบ ผู้ใช้กดแล้วเห็นชื่อเอกสาร หน้าเอกสารเมื่อเป็น PDF/TXT ที่ map ได้ ตำแหน่ง chunk และข้อความต้นทางใน dialog ทำให้ตรวจสอบคำตอบย้อนหลังได้ง่ายขึ้น
+เมื่อ AI ตอบพร้อม citation ระบบจะแสดงปุ่ม `อ้างอิง` ใต้คำตอบ ผู้ใช้กดแล้วเห็นชื่อเอกสาร หน้าเอกสารเมื่อเป็น PDF/TXT ที่ map ได้ ตำแหน่ง chunk ข้อความต้นทาง และปุ่มเปิดไฟล์ต้นฉบับ ถ้าเป็น PDF dialog จะฝัง preview จาก protected file endpoint พร้อมเปิดไปยังหน้าที่อ้างอิง
 
-ระบบเพิ่ม `/api/documents/[documentId]?chunkId=...` เพื่อโหลด citation preview จาก chunk จริงย้อนหลัง ถ้าเป็น PDF parser จะเก็บ `pageNumber` ลง `DocumentChunk` เพื่อแสดงตำแหน่งหน้าใน citation dialog
+ระบบเพิ่ม `/api/documents/[documentId]?chunkId=...` เพื่อโหลด citation preview จาก chunk จริงย้อนหลัง และ `/api/documents/[documentId]/file` เพื่อเปิดไฟล์ต้นฉบับแบบ protected ตาม session ถ้าเป็น PDF parser จะเก็บ `pageNumber` ลง `DocumentChunk` เพื่อแสดงตำแหน่งหน้าใน citation dialog
 
 ### 6. Summarize Whole Document
 
 ถ้าผู้ใช้เลือกเอกสารและถามแนวสรุปทั้งเอกสาร เช่น “ช่วยสรุปเอกสารนี้ทั้งหมด” ระบบจะใช้ summary cache ของเอกสารร่วมกับ chunks ตามลำดับ `chunkIndex` และมี context fitting เพื่อกัน context ใหญ่เกิน model
 
-summary cache เวอร์ชันปัจจุบันจะสร้างจากทุก chunk ของเอกสาร ไม่สุ่มหรือดึงเฉพาะบางช่วงเหมือน RAG top-k ปกติ จากนั้น prompt จะเข้าสู่โหมดสรุปแบบละเอียด โดยกำชับให้ครอบคลุมภาพรวม, ประเด็นสำคัญทั้งหมด, รายละเอียดตามลำดับเอกสาร, ข้อสรุป และข้อจำกัดหรือสิ่งที่ยังไม่ชัดเจน พร้อม citation เมื่อใช้ข้อมูลจาก context
+summary cache เวอร์ชันปัจจุบันจะสร้างจากทุก chunk ของเอกสาร ไม่สุ่มหรือดึงเฉพาะบางช่วงเหมือน RAG top-k ปกติ และจัดกลุ่มแบบ hierarchical เป็นช่วงเอกสารพร้อมช่วงหน้า จากนั้น prompt จะเข้าสู่โหมดสรุปแบบละเอียด โดยกำชับให้ครอบคลุมภาพรวม, ประเด็นสำคัญทั้งหมด, รายละเอียดตามลำดับเอกสาร, ข้อสรุป และข้อจำกัดหรือสิ่งที่ยังไม่ชัดเจน พร้อม citation เมื่อใช้ข้อมูลจาก context
 
 ปุ่ม “สรุปเอกสาร” ใน chat composer จะ disable จนกว่าผู้ใช้จะเลือกเอกสารจาก dropdown ก่อน เมื่อเลือกแล้วปุ่มจะส่ง prompt กลาง `ช่วยสรุปเอกสารนี้ทั้งหมดแบบละเอียด เป็นระบบ และอ่านเข้าใจง่าย` พร้อม `documentId` ของเอกสารที่เลือกเข้า `/api/chat` เพื่อให้ backend ใช้ `retrieveWholeDocumentContext` และ `summaryMode: comprehensive` แทน RAG top-k ปกติ
 
@@ -248,6 +253,7 @@ DOCUMENT_WORKER_LOCK_TIMEOUT_MS=300000
 COOKIE_SECURE=false
 FULL_DOCUMENT_CONTEXT_MAX_CHUNKS=200
 FULL_DOCUMENT_CONTEXT_MAX_TOKENS=120000
+CHROMA_INDEX_BATCH_SIZE=32
 ```
 
 หมายเหตุ: production ควรใช้ Docker secrets หรือ secret manager แทนการเก็บ secret ตรงใน `.env` โดยมีตัวอย่างใน `docker-compose.prod.yml` และ `docs/production-secrets.md`
@@ -262,10 +268,13 @@ FULL_DOCUMENT_CONTEXT_MAX_TOKENS=120000
 - Database migration status
 - Upload directory writable
 - Operational metrics เช่นจำนวนเอกสารตามสถานะ, stale processing jobs, token usage รวม
+- Job monitor สำหรับดู queued/processing/failed/retry, progress ต่อ chunk, attempts, stale job และสั่ง retry/cancel/reconcile จาก UI
 
 หน้า admin จะแสดงสถานะเป็น `ปกติ`, `ควรตรวจสอบ`, `ผิดปกติ` และถ้า service มีปัญหาจะมีช่อง “วิธีแก้ต่อไป” เช่น ตรวจ OpenAI key/quota, restart Chroma, ตรวจ Redis URL, ตรวจ DATABASE_URL หรือ permission ของ upload volume
 
 alert ในหน้า chat/upload มีปุ่ม recovery เช่น `เปิด Diagnostics` หรือ `ไปหน้าอัปโหลด` เมื่อ error นั้นมี action ที่ผู้ใช้ทำต่อได้ทันที
+
+หน้า admin มีส่วน “คิวประมวลผลเอกสาร” เพื่อ recovery งานที่ค้างหรือ fail ได้โดยไม่ต้องเรียก API เอง ผู้ดูแลสามารถกดส่งงานกลับเข้าคิว, ยกเลิกงานที่ยังรันอยู่ หรือ reconcile Chroma ทั้งระบบจากหน้าเดียวกัน
 
 เข้าใช้งานผ่าน:
 
@@ -283,11 +292,10 @@ curl http://localhost:3000/api/admin/diagnostics
 
 - Auth ยังเป็น mock user เดียว ยังไม่มีระบบ user management จริง
 - UX/UI ถูกปรับให้ใช้งานจริงมากขึ้นแล้ว แต่ยังควรเพิ่ม usability test กับผู้ใช้จริงเพื่อดูว่าขั้นตอน upload -> เลือกเอกสาร -> สรุปเอกสาร เข้าใจง่ายพอหรือไม่
-- Worker เป็น background polling worker พร้อม lock/retry แล้ว แต่ถ้าปริมาณงานสูงมากควรใช้ queue จริง เช่น BullMQ/Redis streams พร้อม dead-letter queue
+- Worker มี job monitor และ retry/cancel แล้ว แต่ถ้าปริมาณงานสูงมากควรใช้ queue จริง เช่น BullMQ/Redis streams พร้อม dead-letter queue
 - Rate limit ใช้ Redis เมื่อกำหนด `RATE_LIMIT_REDIS_URL` และ fallback เป็น SQLite แต่ production หลาย instance ควรบังคับ Redis ให้พร้อมใช้งานเสมอ
-- การสรุปทั้งเอกสารครอบคลุมทุก chunk ผ่าน summary cache และ context fitting แล้ว แต่เอกสารใหญ่มากยังควรเพิ่ม map-reduce summarization แบบหลายชั้นเพื่อสรุประดับ section/chapter ให้ละเอียดขึ้นโดยไม่ชน context limit
-- ปุ่มสรุปเอกสารผูกกับเอกสารที่เลือกแล้ว แต่ยังไม่ได้รัน Playwright browser e2e จริงล่าสุดเพราะ sandbox/approval limit ของเครื่องมือ ไม่ใช่ failure จากโค้ด
+- การสรุปทั้งเอกสารครอบคลุมทุก chunk ผ่าน hierarchical summary cache และ context fitting แล้ว แต่ยังไม่ใช่ LLM map-reduce หลาย call แบบ production เต็มรูปแบบสำหรับเอกสารระดับใหญ่มาก
 - SQLite เหมาะกับ assignment/local demo แต่ production ที่มีผู้ใช้พร้อมกันจำนวนมากควรพิจารณา PostgreSQL
-- Chroma reconciliation ยังเป็น manual re-index/admin endpoint ยังไม่มี scheduled reconciliation อัตโนมัติ
+- Chroma reconciliation ทำจากหน้า admin ได้แล้ว แต่ยังไม่มี scheduled reconciliation อัตโนมัติ
 - Observability มี diagnostics และ structured worker logs แล้ว แต่ยังไม่มี external metrics/alerting เช่น Prometheus หรือ OpenTelemetry
-- Citation dialog แสดง excerpt และ page number ได้แล้ว แต่ยังไม่ใช่ PDF viewer แบบ highlight บนไฟล์จริง ถ้าต้องการตรวจระดับ pixel/page ใน PDF ควรเพิ่ม viewer ที่ render PDF และ jump ไปหน้าที่อ้างอิง
+- Citation dialog แสดง excerpt, page number และ preview ไฟล์ต้นฉบับได้แล้ว แต่ยังไม่ highlight ตำแหน่งข้อความบน PDF แบบ pixel-level
