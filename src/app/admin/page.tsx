@@ -18,6 +18,7 @@ export const runtime = "nodejs";
 
 type DiagnosticCardProps = {
   title: string;
+  nextStep?: string;
   status: "ok" | "warning" | "error";
   rows: Array<{ label: string; value: string | number | boolean | null | undefined }>;
   message?: string;
@@ -53,8 +54,37 @@ function formatValue(value: DiagnosticCardProps["rows"][number]["value"]) {
   return String(value);
 }
 
-function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
+function defaultNextStep(title: string, status: DiagnosticCardProps["status"]) {
+  if (status === "ok") {
+    return undefined;
+  }
+
+  if (title === "OpenAI") {
+    return "ตรวจ OPENAI_API_KEY, OPENAI_MODEL, quota และ billing จากนั้นลองถามใหม่";
+  }
+
+  if (title === "Chroma") {
+    return "รัน docker compose ps/logs เพื่อตรวจ Chroma แล้วใช้ปุ่มสร้างดัชนีใหม่ในหน้าอัปโหลด";
+  }
+
+  if (title === "Redis rate limit") {
+    return "ตรวจ RATE_LIMIT_REDIS_URL หรือสถานะ Redis container ถ้าต้องการ rate limit แบบแชร์หลาย instance";
+  }
+
+  if (title === "ฐานข้อมูล") {
+    return "รัน prisma migrate deploy ใน container หรือเช็ค DATABASE_URL และ volume SQLite";
+  }
+
+  if (title === "โฟลเดอร์อัปโหลด") {
+    return "ตรวจ permission ของ upload volume หรือค่า UPLOAD_DIR";
+  }
+
+  return "เปิด logs ของ web/worker แล้วแก้ service ที่มีสถานะผิดปกติ";
+}
+
+function DiagnosticCard({ title, status, rows, message, nextStep }: DiagnosticCardProps) {
   const config = statusConfig[status];
+  const advice = nextStep ?? defaultNextStep(title, status);
 
   return (
     <Paper
@@ -109,6 +139,25 @@ function DiagnosticCard({ title, status, rows, message }: DiagnosticCardProps) {
           >
             <Typography variant="caption" component="span">
               {message}
+            </Typography>
+          </Box>
+        ) : null}
+
+        {advice ? (
+          <Box
+            sx={{
+              p: 1.5,
+              borderRadius: 1.5,
+              bgcolor: "background.default",
+              border: 1,
+              borderColor: "divider"
+            }}
+          >
+            <Typography variant="caption" sx={{ display: "block", fontWeight: 800 }}>
+              วิธีแก้ต่อไป
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {advice}
             </Typography>
           </Box>
         ) : null}
@@ -197,6 +246,11 @@ export default async function AdminPage() {
               <DiagnosticCard
                 title="ภาพรวมการทำงาน"
                 status={diagnostics.metrics.status}
+                nextStep={
+                  diagnostics.metrics.staleProcessing > 0
+                    ? "มีงานประมวลผลค้าง ควร restart worker หรือตรวจ DOCUMENT_WORKER_LOCK_TIMEOUT_MS"
+                    : undefined
+                }
                 rows={[
                   { label: "เอกสารรอประมวลผล", value: diagnostics.metrics.documentsByStatus.queued ?? 0 },
                   { label: "เอกสารกำลังประมวลผล", value: diagnostics.metrics.documentsByStatus.processing ?? 0 },

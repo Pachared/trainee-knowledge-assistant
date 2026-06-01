@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/db/prisma";
 import { estimateTokens } from "@/lib/ai/tokenizer";
 
+type MessageWithCitedChunks = {
+  id: string;
+  citedChunkIds: string | null;
+};
+
 export async function listChats(userId: string, query?: string) {
   return prisma.chatSession.findMany({
     where: {
@@ -92,6 +97,71 @@ export async function getChatMessages(userId: string, chatSessionId: string) {
   }
 
   return chat;
+}
+
+export async function hydrateMessagesWithCitations<T extends MessageWithCitedChunks>(userId: string, messages: T[]) {
+  const chunkIds = Array.from(
+    new Set(
+      messages.flatMap((message) =>
+        (message.citedChunkIds ?? "")
+          .split(",")
+          .map((chunkId) => chunkId.trim())
+          .filter(Boolean)
+      )
+    )
+  );
+
+  if (!chunkIds.length) {
+    return messages.map((message) => ({ ...message, citations: [] }));
+  }
+
+  const chunks = await prisma.documentChunk.findMany({
+    where: {
+      id: { in: chunkIds },
+      document: { userId }
+    },
+    include: {
+      document: {
+        select: {
+          id: true,
+          title: true
+        }
+      }
+    }
+  });
+  const byId = new Map(chunks.map((chunk) => [chunk.id, chunk]));
+
+  return messages.map((message) => {
+    const citations = (message.citedChunkIds ?? "")
+      .split(",")
+      .map((chunkId) => chunkId.trim())
+      .filter(Boolean)
+      .map((chunkId, index) => {
+        const chunk = byId.get(chunkId);
+
+        if (!chunk) {
+          return {
+            index: index + 1,
+            chunkId,
+            title: "ไม่พบแหล่งอ้างอิงแล้ว"
+          };
+        }
+
+        return {
+          index: index + 1,
+          chunkId,
+          documentId: chunk.document.id,
+          title: chunk.document.title,
+          chunkIndex: chunk.chunkIndex,
+          excerpt: chunk.content.slice(0, 700)
+        };
+      });
+
+    return {
+      ...message,
+      citations
+    };
+  });
 }
 
 export async function ensureChat(userId: string, chatSessionId?: string) {

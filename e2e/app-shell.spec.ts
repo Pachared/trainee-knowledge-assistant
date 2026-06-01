@@ -80,14 +80,14 @@ test.describe("protected routes", () => {
     await page.goto("/chat");
 
     await expect(page).toHaveURL(/\/login\?next=%2Fchat$/);
-    await expect(page.getByRole("heading", { name: "เข้าสู่ Trainee Knowledge Assistant" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "เข้าสู่ระบบ" })).toBeVisible();
   });
 
   test("protects the admin diagnostics page", async ({ page }) => {
     await page.goto("/admin");
 
     await expect(page).toHaveURL(/\/login\?next=%2Fadmin$/);
-    await expect(page.getByRole("heading", { name: "เข้าสู่ Trainee Knowledge Assistant" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "เข้าสู่ระบบ" })).toBeVisible();
   });
 
   test("redirects authenticated users away from login", async ({ page }) => {
@@ -109,7 +109,7 @@ test.describe("desktop shell", () => {
     await expect(page.getByLabel("ค้นหาแชท")).toBeVisible();
     await expect(page.getByText("ประวัติแชท", { exact: true })).toBeVisible();
     await expect(page.getByPlaceholder("ถามอะไรก็ได้")).toBeVisible();
-    await expect(page.getByRole("link", { name: "อัปโหลด" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "อัปโหลด", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "โทเคน" })).toBeVisible();
     await expect(page.getByRole("link", { name: "ตรวจระบบ" })).toBeVisible();
   });
@@ -178,7 +178,7 @@ test.describe("management actions", () => {
     await expect(page.getByText(deleteTitle, { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: `re-index Chroma ${reindexTitle}` }).click();
-    await expect(page.getByText(/re-index Chroma|Chroma indexing failed/).first()).toBeVisible();
+    await expect(page.getByText(/อัปเดตดัชนีแล้ว|ดัชนีเอกสารยังไม่สมบูรณ์|Chroma indexing failed/).first()).toBeVisible();
 
     await page.getByRole("button", { name: `ลบเอกสาร ${deleteTitle}` }).click();
     await page.getByRole("dialog", { name: "ลบเอกสาร" }).getByRole("button", { name: "ลบเอกสาร" }).click();
@@ -199,12 +199,12 @@ test.describe("document summary shortcut", () => {
     let chatPayload: { message?: string; documentId?: string } | undefined;
 
     await page.goto("/chat");
-    await expect(page.getByText("เลือกเอกสารที่พร้อมใช้งานก่อนสรุป")).toBeVisible();
+    await expect(page.getByText("ยังไม่เลือกเอกสาร ระบบจะค้นจากทุกไฟล์ที่พร้อมใช้งาน")).toBeVisible();
     await expect(page.getByRole("button", { name: "สรุปเอกสาร" })).toBeDisabled();
 
     await page.getByLabel("เลือกเอกสารสำหรับ RAG").click();
-    await page.getByRole("option", { name: title }).click();
-    await expect(page.getByText("พร้อมสรุปเอกสารที่เลือก")).toBeVisible();
+    await page.getByRole("option", { name: new RegExp(title) }).click();
+    await expect(page.getByRole("button", { name: "สรุปเอกสาร" })).toBeEnabled();
 
     await page.route("**/api/chat", async (route) => {
       chatPayload = JSON.parse(route.request().postData() ?? "{}") as typeof chatPayload;
@@ -229,6 +229,73 @@ test.describe("document summary shortcut", () => {
         message: expect.stringContaining("เอกสารนี้ทั้งหมด")
       });
   });
+
+  test("shows selected document context and clickable citations", async ({ page, isMobile }) => {
+    test.skip(isMobile, "desktop-only citation assertion");
+
+    await login(page);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const title = `citation-doc-${suffix}`;
+    await uploadTextDocument(page, `${title}.txt`, "Citation source text from uploaded document.");
+
+    await page.goto("/chat");
+    await page.getByLabel("เลือกเอกสารสำหรับ RAG").click();
+    await page.getByRole("option", { name: new RegExp(title) }).click();
+
+    await page.route("**/api/chat", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream; charset=utf-8",
+        body: [
+          `event: meta\ndata: ${JSON.stringify({
+            chatId: "citation-chat",
+            citations: [
+              {
+                index: 1,
+                chunkId: "chunk-1",
+                documentId: "doc-1",
+                title,
+                chunkIndex: 0,
+                excerpt: "Citation source text from uploaded document."
+              }
+            ]
+          })}`,
+          `event: delta\ndata: ${JSON.stringify({ content: "คำตอบพร้อมอ้างอิง" })}`,
+          `event: done\ndata: ${JSON.stringify({
+            message: {
+              id: "assistant-citation",
+              role: "assistant",
+              content: "คำตอบพร้อมอ้างอิง",
+              promptTokens: 10,
+              outputTokens: 8,
+              model: "mock-model",
+              citations: [
+                {
+                  index: 1,
+                  chunkId: "chunk-1",
+                  documentId: "doc-1",
+                  title,
+                  chunkIndex: 0,
+                  excerpt: "Citation source text from uploaded document."
+                }
+              ],
+              createdAt: new Date().toISOString()
+            },
+            usage: {}
+          })}`,
+          ""
+        ].join("\n\n")
+      });
+    });
+
+    await page.getByPlaceholder("ถามอะไรก็ได้").fill("คำถามทดสอบ citation");
+    await page.getByRole("button", { name: "ส่งข้อความ" }).click();
+
+    await expect(page.getByText(`กำลังถามจาก: ${title}`)).toBeVisible();
+    await expect(page.getByText("คำตอบพร้อมอ้างอิง")).toBeVisible();
+    await page.getByRole("button", { name: "อ้างอิง 1" }).click();
+    await expect(page.getByRole("dialog", { name: "แหล่งอ้างอิงจากเอกสาร" })).toContainText("Citation source text from uploaded document.");
+  });
 });
 
 test.describe("mobile drawer", () => {
@@ -249,5 +316,18 @@ test.describe("mobile drawer", () => {
 
     await drawer.getByRole("button", { name: "ปิด sidebar" }).click();
     await expect(drawer).toBeHidden();
+  });
+
+  test("opens the mobile actions menu and navigates to usage", async ({ page, isMobile }) => {
+    test.skip(!isMobile, "mobile-only menu assertion");
+
+    await login(page);
+
+    await page.getByRole("button", { name: "เพิ่มเติม" }).click();
+    await expect(page.getByRole("menuitem", { name: "อัปโหลดเอกสาร" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "ตรวจสถานะระบบ" })).toBeVisible();
+    await page.getByRole("menuitem", { name: "ดูการใช้งานโทเคน" }).click();
+    await expect(page).toHaveURL(/\/usage$/);
+    await expect(page.getByRole("heading", { name: "การใช้งานโทเคน" })).toBeVisible();
   });
 });

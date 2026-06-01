@@ -1,42 +1,59 @@
 "use client";
 
 import { FormEvent, useMemo, useRef, useState } from "react";
+import Autocomplete from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import FormControl from "@mui/material/FormControl";
+import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
-import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
-import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
 import TextareaAutosize from "@mui/material/TextareaAutosize";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import ArrowUpwardOutlinedIcon from "@mui/icons-material/ArrowUpwardOutlined";
 import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
 import AutoAwesomeOutlinedIcon from "@mui/icons-material/AutoAwesomeOutlined";
+import { getDocumentStatusMeta, getReadyDocuments } from "@/components/app/document-status";
 import type { ApiDocument } from "@/components/app/types";
 import { canSummarizeDocument, DOCUMENT_SUMMARY_PROMPT } from "@/components/chat/summary-action";
 
 type ComposerProps = {
   documents: ApiDocument[];
   disabled?: boolean;
+  selectedDocumentId: string;
+  onDocumentChange: (documentId: string) => void;
   onSend: (message: string, documentId?: string) => void;
   onUpload: (file: File) => Promise<void>;
   onPrompt: (message: string, documentId?: string) => void;
 };
 
-export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: ComposerProps) {
+export function Composer({
+  documents,
+  disabled,
+  selectedDocumentId,
+  onDocumentChange,
+  onSend,
+  onUpload,
+  onPrompt
+}: ComposerProps) {
   const [message, setMessage] = useState("");
-  const [documentId, setDocumentId] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const readyDocuments = useMemo(
-    () => documents.filter((document) => ["ready", "ready_without_chroma"].includes(document.status) && (document._count?.chunks ?? 0) > 0),
+  const readyDocuments = useMemo(() => getReadyDocuments(documents), [documents]);
+  const documentOptions = useMemo(
+    () =>
+      [...documents].sort((left, right) => {
+        const leftReady = getDocumentStatusMeta(left).canUseForChat ? 0 : 1;
+        const rightReady = getDocumentStatusMeta(right).canUseForChat ? 0 : 1;
+        return leftReady - rightReady || left.title.localeCompare(right.title, "th");
+      }),
     [documents]
   );
-  const selectedDocumentId = documents.some((document) => document.id === documentId) ? documentId : "";
-  const canSummarize = canSummarizeDocument(selectedDocumentId) && readyDocuments.some((document) => document.id === selectedDocumentId);
+  const selectedDocument = documents.find((document) => document.id === selectedDocumentId) ?? null;
+  const activeDocumentId = selectedDocument?.id ?? "";
+  const canSummarize = canSummarizeDocument(activeDocumentId) && readyDocuments.some((document) => document.id === activeDocumentId);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,7 +62,7 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
       return;
     }
 
-    onSend(message, selectedDocumentId || undefined);
+    onSend(message, activeDocumentId || undefined);
     setMessage("");
   }
 
@@ -126,27 +143,54 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
           </IconButton>
         </Box>
 
-        <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap", mt: 1, px: { xs: 0.5, md: 6 } }}>
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 220 } }}>
-            <Select
-              value={selectedDocumentId}
-              onChange={(event) => setDocumentId(event.target.value)}
-              displayEmpty
-              aria-label="เลือกเอกสารสำหรับ RAG"
-              sx={{ bgcolor: "background.paper", borderRadius: 999 }}
-            >
-              <MenuItem value="">ถามจากทุกเอกสาร</MenuItem>
-              {documents.map((document) => (
-                <MenuItem
-                  key={document.id}
-                  value={document.id}
-                  disabled={!["ready", "ready_without_chroma"].includes(document.status) || !(document._count?.chunks ?? 0)}
-                >
-                  {document.title} {document.status === "queued" || document.status === "processing" ? "(กำลังประมวลผล)" : ""}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap", mt: 1.25, px: { xs: 0.5, md: 6 } }}>
+          <Autocomplete
+            size="small"
+            value={selectedDocument}
+            options={documentOptions}
+            onChange={(_event, value) => onDocumentChange(value?.id ?? "")}
+            getOptionLabel={(document) => document.title}
+            getOptionDisabled={(document) => !getDocumentStatusMeta(document).canUseForChat}
+            groupBy={(document) => (getDocumentStatusMeta(document).canUseForChat ? "พร้อมใช้งาน" : "ยังไม่พร้อม")}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            noOptionsText="ยังไม่มีเอกสาร"
+            clearText="ถามจากทุกเอกสาร"
+            sx={{ minWidth: { xs: "100%", sm: 300 }, flex: { xs: "1 1 100%", md: "0 1 360px" } }}
+            renderInput={(params) => {
+              return (
+                <TextField
+                  {...params}
+                  label="เอกสารอ้างอิง"
+                  placeholder="ค้นหาหรือเลือกเอกสาร"
+                  slotProps={{
+                    ...params.slotProps,
+                    htmlInput: {
+                      ...params.slotProps.htmlInput,
+                      "aria-label": "เลือกเอกสารสำหรับ RAG"
+                    }
+                  }}
+                />
+              );
+            }}
+            renderOption={(props, document) => {
+              const meta = getDocumentStatusMeta(document);
+              const { key, ...optionProps } = props;
+
+              return (
+                <Box component="li" key={key} {...optionProps} sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body2" noWrap>
+                      {document.title}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {meta.stepLabel}
+                    </Typography>
+                  </Box>
+                  <Chip size="small" label={meta.label} color={meta.severity === "error" ? "error" : meta.severity === "success" ? "success" : "warning"} />
+                </Box>
+              );
+            }}
+          />
           <Tooltip title={canSummarize ? "สรุปเอกสารที่เลือก" : "เลือกเอกสารที่ประมวลผลแล้วก่อนสรุป"}>
             <span>
               <Button
@@ -154,7 +198,7 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
                 variant="outlined"
                 startIcon={<AutoAwesomeOutlinedIcon />}
                 disabled={disabled || !canSummarize}
-                onClick={() => onPrompt(DOCUMENT_SUMMARY_PROMPT, selectedDocumentId)}
+                onClick={() => onPrompt(DOCUMENT_SUMMARY_PROMPT, activeDocumentId)}
                 sx={{ borderRadius: 999, bgcolor: "background.paper" }}
               >
                 สรุปเอกสาร
@@ -162,7 +206,11 @@ export function Composer({ documents, disabled, onSend, onUpload, onPrompt }: Co
             </span>
           </Tooltip>
           <Typography variant="caption" color="text.secondary">
-            {uploading ? "กำลังอัปโหลด..." : canSummarize ? "พร้อมสรุปเอกสารที่เลือก" : "เลือกเอกสารที่พร้อมใช้งานก่อนสรุป"}
+            {uploading
+              ? "กำลังอัปโหลด..."
+              : selectedDocument
+                ? getDocumentStatusMeta(selectedDocument).nextStep
+                : "ยังไม่เลือกเอกสาร ระบบจะค้นจากทุกไฟล์ที่พร้อมใช้งาน"}
           </Typography>
         </Stack>
         <input

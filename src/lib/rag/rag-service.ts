@@ -6,7 +6,9 @@ import { rankFallbackChunks } from "@/lib/rag/fallback-search";
 
 export type RetrievedContext = {
   chunkId: string;
+  documentId?: string;
   documentTitle: string;
+  chunkIndex?: number;
   content: string;
   score: number;
 };
@@ -89,7 +91,9 @@ export async function retrieveContext(input: {
 
         return {
           chunkId: chunk.id,
+          documentId: chunk.document.id,
           documentTitle: chunk.document.title,
+          chunkIndex: chunk.chunkIndex,
           content: chunk.content,
           score: results.distances?.[0]?.[index] ?? 0
         };
@@ -156,6 +160,7 @@ export async function retrieveWholeDocumentContext(input: {
   if (summary) {
     contexts.push({
       chunkId: summary.id,
+      documentId: summary.document.id,
       documentTitle: `${summary.document.title} - summary`,
       content: summary.content,
       score: 0
@@ -172,7 +177,9 @@ export async function retrieveWholeDocumentContext(input: {
     usedTokens = nextTokens;
     contexts.push({
       chunkId: chunk.id,
+      documentId: chunk.document.id,
       documentTitle: chunk.document.title,
+      chunkIndex: chunk.chunkIndex,
       content: chunk.content,
       score: 0
     });

@@ -201,3 +201,11 @@
 **AI Response:** ปรับ MUI theme กลางให้ใช้ palette ใหม่, เพิ่ม `AppLogo` แล้วนำไปใช้ที่ login/sidebar/top bar, ปรับ copy หน้า login/chat/upload/usage/admin เป็นภาษาไทยที่สั้นและเข้าใจง่าย, เพิ่ม spacing ใน layout หลัก, ทำเมนู mobile “เพิ่มเติม” ให้เปิด MUI menu จริง, ปรับปุ่มอัปโหลดให้เลือกไฟล์เดิมซ้ำได้, เพิ่ม upload polling สำหรับเอกสารที่ยังประมวลผล, ปรับปุ่มสรุปเอกสารให้มี tooltip/สถานะ disabled ที่ชัดเจน และเพิ่ม auto-scroll ใน chat เมื่อมีข้อความใหม่หรือ AI กำลัง stream
 
 **My Adjustment:** ผู้ใช้ต้องการ UX ที่ใช้งานง่ายที่สุดและลดส่วนที่เป็นแค่หน้าตา จึงตรวจทั้งระบบในมุมผู้ใช้จริงว่าเมนูไปหน้าได้, ปุ่มที่แสดงบน UI มี behavior, ข้อความไม่เทคนิคเกินไป และเอกสาร README/AI_JOURNAL/DECISIONS ต้องสะท้อนระบบ UX ล่าสุดก่อน push
+
+## Session 26: ทำ UX/UI ที่ยังไปไม่สุดให้ครบ 8 จุด
+
+**Prompt:** ทำทั้งหมดตั้งแต่ข้อ 1-8 ได้แก่สถานะเอกสารหลังอัปโหลด, แสดงว่า AI ใช้เอกสารไหน, error state ที่อ่านง่าย, empty state ที่พาไป action ต่อ, document picker ที่ใช้ง่าย, citation UX, mobile composer/menu QA และ admin diagnostics ที่มี next step พร้อมอัปเดต README, AI_JOURNAL, DECISIONS และ push
+
+**AI Response:** เพิ่ม helper กลาง `document-status.ts` เพื่อแปลงสถานะเอกสารเป็น label, step, progress, helper text และ next step, เพิ่ม `status-feedback.ts` เพื่อแสดง error/status เป็นข้อความไทยที่บอกสาเหตุและสิ่งที่ต้องทำต่อ, ปรับ upload view ให้มี progress/step ต่อเอกสาร, เปลี่ยน document picker เป็น MUI Autocomplete ที่ค้นหาไฟล์ได้และแยกกลุ่มพร้อมใช้งาน/ยังไม่พร้อม, lift selected document state ไปที่ chat view เพื่อแสดง “กำลังถามจาก”, เพิ่ม citation metadata จาก backend และ citation dialog ที่เปิดดู excerpt ต้นทางได้, เพิ่ม empty state พร้อมปุ่ม action ใน upload/usage และเพิ่ม next step ใน admin diagnostics
+
+**My Adjustment:** ผู้ใช้ต้องการให้ UX/UI ทุกส่วนที่จำเป็นใช้งานได้จริง ไม่ใช่เฉพาะหน้าตา จึงเพิ่ม/ปรับ Playwright e2e สำหรับ summary shortcut, selected document context, clickable citation และ mobile actions menu พร้อมรัน lint, test, build และ e2e ก่อน push

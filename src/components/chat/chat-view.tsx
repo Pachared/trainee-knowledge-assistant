@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import DriveFolderUploadOutlinedIcon from "@mui/icons-material/DriveFolderUploadOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import TipsAndUpdatesOutlinedIcon from "@mui/icons-material/TipsAndUpdatesOutlined";
+import { getDocumentStatusMeta } from "@/components/app/document-status";
+import { getStatusFeedback } from "@/components/app/status-feedback";
 import type { ApiDocument, ApiMessage } from "@/components/app/types";
 import { Composer } from "@/components/chat/composer";
 import { MessageList } from "@/components/chat/message-list";
@@ -25,6 +29,12 @@ type ChatViewProps = {
 export function ChatView({ messages, documents, streaming, status, onSend, onUpload }: ChatViewProps) {
   const empty = messages.length === 0;
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState("");
+  const selectedDocument = useMemo(
+    () => documents.find((document) => document.id === selectedDocumentId),
+    [documents, selectedDocumentId]
+  );
+  const statusFeedback = getStatusFeedback(status);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -72,17 +82,49 @@ export function ChatView({ messages, documents, streaming, status, onSend, onUpl
             </Box>
           </Box>
         ) : (
-          <MessageList messages={messages} streaming={streaming} />
+          <Stack spacing={2.25} sx={{ width: "min(100%, 920px)", mx: "auto" }}>
+            {selectedDocument ? (
+              <Alert
+                severity={getDocumentStatusMeta(selectedDocument).severity}
+                variant="outlined"
+                sx={{ bgcolor: "background.paper", alignItems: "center" }}
+                action={<Chip size="small" label={getDocumentStatusMeta(selectedDocument).label} />}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                  กำลังถามจาก: {selectedDocument.title}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {getDocumentStatusMeta(selectedDocument).nextStep}
+                </Typography>
+              </Alert>
+            ) : null}
+            <MessageList messages={messages} streaming={streaming} />
+          </Stack>
         )}
       </Box>
-      {status ? (
-        <Typography variant="caption" color="text.secondary" align="center" sx={{ px: 2, mb: 1 }}>
-          {status}
-        </Typography>
+      {statusFeedback ? (
+        <Alert
+          severity={statusFeedback.severity}
+          sx={{ mx: { xs: 1.5, md: "auto" }, mb: 1, width: { md: "min(100% - 48px, 920px)" }, bgcolor: "background.paper" }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 800 }}>
+            {statusFeedback.title}
+          </Typography>
+          <Typography variant="caption" sx={{ display: "block" }}>
+            {statusFeedback.message}
+          </Typography>
+          {statusFeedback.nextStep ? (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+              วิธีแก้: {statusFeedback.nextStep}
+            </Typography>
+          ) : null}
+        </Alert>
       ) : null}
       <Composer
         documents={documents}
         disabled={streaming}
+        selectedDocumentId={selectedDocumentId}
+        onDocumentChange={setSelectedDocumentId}
         onSend={onSend}
         onUpload={onUpload}
         onPrompt={(message, documentId) => onSend(message, documentId)}

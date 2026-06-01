@@ -188,6 +188,42 @@ Docker Compose local ยังขึ้นกับ Docker Desktop state แล�
 
 ข้อดีคือ UI สม่ำเสมอและต่อยอดง่ายขึ้น เพราะ component ใหม่สามารถใช้ theme เดิมได้ทันที ข้อเสียคือ MUI theme ยังไม่ครอบทุก edge case เช่น markdown จาก AI และ layout เฉพาะจุด จึงยังต้องมี global CSS บางส่วน อีกจุดคือ logo ปัจจุบันเป็น CSS-based mark ไม่ใช่ไฟล์ brand asset ถ้าระบบใช้จริงในองค์กรควรออกแบบ brand guideline และ export logo เป็น SVG/PNG อย่างเป็นทางการ
 
+## Decision 13: ทำ UX เอกสารแบบ state-driven แทนข้อความสถานะกระจายตาม component
+
+### Context
+
+หลังระบบมี background worker, Chroma, SQLite fallback และ re-index แล้ว ผู้ใช้ต้องรู้ว่าเอกสารแต่ละไฟล์อยู่ขั้นตอนไหน ไม่เช่นนั้นจะดูเหมือนระบบค้างเมื่อ upload แล้วเอกสารยังไม่พร้อมใช้งาน อีกปัญหาคือหน้าต่าง ๆ ใช้ข้อความสถานะคนละแบบ เช่น upload status, composer hint, failed reason และ admin diagnostics ทำให้ UX ไม่สม่ำเสมอและแก้ยาก
+
+### Alternatives Considered
+
+ทางเลือกแรกคือ hardcode ข้อความในแต่ละ component ต่อไป ซึ่งทำได้เร็วแต่เสี่ยงข้อความไม่ตรงกัน ทางเลือกที่สองคือเพิ่ม status enum/migration ใหม่ใน database ซึ่งหนักเกินไปเพราะสถานะหลักมีอยู่แล้ว ทางเลือกที่เหมาะกว่าคือสร้าง UI helper กลางที่แปลงสถานะเอกสารเดิมให้เป็น label, progress, helper text, next step และ flag ว่าใช้ chat/summary ได้หรือไม่
+
+### Why state-driven UI helpers
+
+เลือกเพิ่ม `document-status.ts` และ `status-feedback.ts` เพื่อให้ upload view, composer, chat view และ error alert ใช้ความหมายเดียวกัน เอกสารจึงแสดง step/progress เช่น รับไฟล์แล้ว, กำลังอ่านข้อความ, พร้อมใช้งาน หรือพร้อมใช้แบบสำรอง ส่วน error state จะบอกสาเหตุและวิธีต่อไป เช่น ตรวจ OpenAI key/quota, กดสร้างดัชนีใหม่, export PDF ใหม่ หรืออัปโหลด TXT แทน
+
+### Trade-offs
+
+ข้อดีคือ UX ชัดขึ้นมากโดยไม่ต้องเปลี่ยน schema และทำให้ผู้ใช้รู้ว่าต้องรอหรือกดอะไรต่อ ข้อเสียคือ progress เป็น semantic progress ไม่ใช่เปอร์เซ็นต์จริงจาก worker แต่ละขั้น ถ้าต้องการ progress จริงในอนาคตควรเพิ่ม job events หรือ progress field จาก worker
+
+## Decision 14: ให้ citation คลิกดู excerpt ต้นทางได้ใน UI
+
+### Context
+
+ระบบ RAG ต้องทำให้ผู้ใช้ตรวจสอบได้ว่า AI ตอบจากเอกสารไหน เดิมระบบบันทึก `citedChunkIds` แล้ว แต่ UI ยังแสดง metadata แบบจำกัด ทำให้ผู้ใช้ไม่มั่นใจว่าคำตอบอ้างอิงส่วนใดของเอกสาร โดยเฉพาะเมื่อมีหลายไฟล์หรือสรุปเอกสารยาว
+
+### Alternatives Considered
+
+ทางเลือกแรกคือแสดงเฉพาะชื่อไฟล์ใต้คำตอบ ซึ่งง่ายแต่ยังตรวจข้อความต้นทางไม่ได้ ทางเลือกที่สองคือสร้าง document viewer เต็มรูปแบบพร้อม mapping หน้า PDF ซึ่งดีที่สุดแต่ใหญ่เกิน scope รอบนี้ ทางเลือกที่สามคือ hydrate citation metadata จาก chunks แล้วให้ผู้ใช้เปิด dialog ดูชื่อเอกสาร, chunk index และ excerpt ต้นทาง
+
+### Why citation dialog first
+
+เลือก citation dialog เพราะใช้ข้อมูลที่ระบบมีอยู่แล้วจาก `DocumentChunk` และไม่ต้องเปลี่ยน database schema backend จะส่ง citation metadata ใน SSE `meta` และ `done` event ส่วนประวัติแชทที่โหลดย้อนหลังจะ hydrate จาก `citedChunkIds` อีกครั้งใน API messages route ทำให้ทั้งคำตอบใหม่และคำตอบเก่ามีปุ่ม `อ้างอิง` ให้ตรวจข้อความต้นทางได้
+
+### Trade-offs
+
+ข้อดีคือเพิ่ม trust ให้คำตอบ AI และช่วย debug RAG ได้จริง ข้อเสียคือ excerpt ยังเป็นระดับ chunk ไม่ใช่ระดับหน้า PDF หรือ highlight ตำแหน่งจริง ถ้า project ไปต่อควรเพิ่ม PDF page extraction, page number metadata และ document preview ที่ jump ไปตำแหน่งอ้างอิงได้
+
 ## Decision 9: ใช้ Redis rate limit พร้อม SQLite fallback
 
 ### Context

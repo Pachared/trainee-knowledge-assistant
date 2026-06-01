@@ -11,24 +11,15 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
 import Paper from "@mui/material/Paper";
+import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import DriveFolderUploadOutlinedIcon from "@mui/icons-material/DriveFolderUploadOutlined";
 import SyncOutlinedIcon from "@mui/icons-material/SyncOutlined";
+import { getDocumentStatusMeta } from "@/components/app/document-status";
+import { getStatusFeedback } from "@/components/app/status-feedback";
 import type { ApiDocument } from "@/components/app/types";
-
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    queued: "รอประมวลผล",
-    processing: "กำลังประมวลผล",
-    ready: "พร้อมใช้งาน",
-    ready_without_chroma: "พร้อมใช้แบบสำรอง",
-    failed: "ไม่สำเร็จ"
-  };
-
-  return labels[status] || status;
-}
 
 function statusColor(status: string): "default" | "primary" | "success" | "warning" | "error" {
   if (status === "ready") {
@@ -69,6 +60,7 @@ export function UploadView({
   const [bulkReindexing, setBulkReindexing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ApiDocument | null>(null);
   const pendingReindexCount = documents.filter((document) => document.status === "ready_without_chroma").length;
+  const statusFeedback = getStatusFeedback(status);
 
   async function handleFile(file?: File) {
     if (!file) {
@@ -126,9 +118,19 @@ export function UploadView({
           <Typography variant="body1" color="text.secondary" sx={{ mb: 3.5 }}>
             เพิ่มไฟล์ PDF/TXT เพื่อให้ระบบนำไปใช้ค้นหา อ้างอิง และสรุปเอกสารในหน้าแชท
           </Typography>
-          {status ? (
-            <Alert severity={status.includes("ไม่สำเร็จ") || status.includes("failed") ? "warning" : "info"} sx={{ mb: 2 }}>
-              {status}
+          {statusFeedback ? (
+            <Alert severity={statusFeedback.severity} sx={{ mb: 2, bgcolor: "background.paper" }}>
+              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                {statusFeedback.title}
+              </Typography>
+              <Typography variant="caption" sx={{ display: "block" }}>
+                {statusFeedback.message}
+              </Typography>
+              {statusFeedback.nextStep ? (
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  วิธีต่อไป: {statusFeedback.nextStep}
+                </Typography>
+              ) : null}
             </Alert>
           ) : null}
 
@@ -190,24 +192,47 @@ export function UploadView({
                   }}
                 >
                   <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 900, overflowWrap: "anywhere" }}>
-                      {document.title}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {document.filename} · {Math.ceil(document.size / 1024)} KB · {document._count?.chunks ?? 0} chunks
-                    </Typography>
-                    {document.failedReason ? (
-                      <Typography
-                        variant="caption"
-                        color={document.status === "failed" ? "error.main" : "warning.main"}
-                        sx={{ mt: 0.5, display: "block", overflowWrap: "anywhere" }}
-                      >
-                        เหตุผล: {document.failedReason}
-                      </Typography>
-                    ) : null}
+                    {(() => {
+                      const meta = getDocumentStatusMeta(document);
+
+                      return (
+                        <Stack spacing={1.1}>
+                          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", alignItems: "center" }}>
+                            <Typography variant="body2" sx={{ fontWeight: 900, overflowWrap: "anywhere", flex: "1 1 240px" }}>
+                              {document.title}
+                            </Typography>
+                            <Chip size="small" label={meta.label} color={statusColor(document.status)} variant="outlined" />
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary">
+                            {document.filename} · {Math.ceil(document.size / 1024)} KB · {document._count?.chunks ?? 0} chunks
+                          </Typography>
+                          <Box>
+                            <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", mb: 0.75 }}>
+                              <Typography variant="caption" sx={{ fontWeight: 800 }}>
+                                {meta.stepLabel}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {meta.progress}%
+                              </Typography>
+                            </Stack>
+                            <LinearProgress
+                              variant="determinate"
+                              value={meta.progress}
+                              color={meta.severity === "error" ? "error" : meta.severity === "success" ? "success" : "primary"}
+                              sx={{ height: 7, borderRadius: 99, bgcolor: "divider" }}
+                            />
+                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {meta.helperText}
+                          </Typography>
+                          <Typography variant="caption" color={meta.severity === "error" ? "error.main" : meta.severity === "warning" ? "warning.main" : "text.secondary"}>
+                            วิธีต่อไป: {meta.nextStep}
+                          </Typography>
+                        </Stack>
+                      );
+                    })()}
                   </Box>
                   <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", justifyContent: { xs: "flex-start", sm: "flex-end" } }}>
-                    <Chip size="small" label={statusLabel(document.status)} color={statusColor(document.status)} variant="outlined" />
                     <IconButton
                       type="button"
                       aria-label={`re-index Chroma ${document.title}`}
@@ -231,9 +256,17 @@ export function UploadView({
                 </Paper>
               ))
             ) : (
-              <Typography variant="body2" color="text.secondary">
-                ยังไม่มีเอกสาร
-              </Typography>
+              <Paper elevation={0} sx={{ border: 1, borderColor: "divider", p: 3, textAlign: "center" }}>
+                <Typography variant="h6" component="p" sx={{ mb: 1 }}>
+                  ยังไม่มีเอกสาร
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  เริ่มจากอัปโหลด PDF หรือ TXT ไฟล์แรก แล้วกลับไปถามหรือสรุปในหน้าแชทได้ทันทีเมื่อสถานะพร้อมใช้งาน
+                </Typography>
+                <Button variant="contained" startIcon={<DriveFolderUploadOutlinedIcon />} onClick={() => inputRef.current?.click()}>
+                  อัปโหลดเอกสารแรก
+                </Button>
+              </Paper>
             )}
           </Stack>
         </Box>

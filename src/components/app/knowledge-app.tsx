@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
-import type { ApiChat, ApiDocument, ApiMessage, ApiUsage, AppView } from "@/components/app/types";
+import type { ApiChat, ApiCitation, ApiDocument, ApiMessage, ApiUsage, AppView } from "@/components/app/types";
 import { Sidebar } from "@/components/app/sidebar";
 import { TopBar } from "@/components/app/top-bar";
 import { ChatView } from "@/components/chat/chat-view";
@@ -312,6 +312,10 @@ export function KnowledgeApp({ view }: KnowledgeAppProps) {
 
           if (parsed.event === "meta") {
             setCurrentChatId(parsed.data.chatId);
+            const citations = (parsed.data.citations ?? []) as ApiCitation[];
+            setMessages((previous) =>
+              previous.map((item) => (item.id === assistantMessage.id ? { ...item, citations } : item))
+            );
           }
 
           if (parsed.event === "delta") {

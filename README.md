@@ -109,6 +109,11 @@ npm run test:docker:rag
 - [x] Mobile drawer/menu ใช้งานจริง ไม่ใช่ UI placeholder
 - [x] Chat auto-scroll ระหว่างถามและตอน AI กำลังตอบ
 - [x] Upload polling แสดงสถานะเอกสารที่กำลังประมวลผล
+- [x] Document status UX แบบ step/progress พร้อมวิธีแก้เมื่อเอกสารผิดพลาด
+- [x] Document picker ในหน้า chat ที่ค้นหาไฟล์ได้ แยกเอกสารพร้อมใช้งานและยังไม่พร้อม
+- [x] แสดงเอกสารที่ AI กำลังใช้ตอบ และเปิด citation เพื่อดูข้อความต้นทางได้
+- [x] Empty state พร้อมปุ่ม action ในหน้า chat, upload และ usage
+- [x] Admin diagnostics แสดง next step เมื่อ OpenAI/Chroma/Redis/DB/upload directory มีปัญหา
 
 ## Architecture
 
@@ -171,6 +176,14 @@ Accent: #84CC16
 
 หลัง upload สำเร็จ UI จะบอกว่าระบบกำลังประมวลผลเอกสาร และหน้าแอปจะ polling สถานะเอกสารที่ยังเป็น `queued` หรือ `processing` ทุก 3 วินาที จนเอกสารเปลี่ยนเป็น `ready`, `ready_without_chroma` หรือ `failed`
 
+หน้า upload แสดงสถานะเอกสารแบบอ่านง่ายเป็น step/progress:
+
+- `รอประมวลผล`: รับไฟล์แล้วและรอ worker
+- `กำลังประมวลผล`: worker กำลังอ่านข้อความ แบ่ง chunks และเตรียม index
+- `พร้อมใช้งาน`: อ่านไฟล์และ index เข้า Chroma สำเร็จ
+- `พร้อมใช้แบบสำรอง`: อ่านไฟล์สำเร็จ แต่ Chroma ยังไม่สมบูรณ์ ระบบจะใช้ SQLite fallback ได้
+- `อ่านไฟล์ไม่สำเร็จ`: แสดง `failedReason` และคำแนะนำว่าควรแก้ไฟล์หรืออัปโหลดใหม่อย่างไร
+
 ### 3. Background Document Worker
 
 worker จะ claim งานจากเอกสารสถานะ `queued` โดยใช้ lock metadata เช่น `lockedBy`, `lockedAt`, `nextAttemptAt` จากนั้น parse PDF/TXT, split เป็น chunks, สร้าง summary cache, สร้าง embeddings และ index เข้า Chroma ถ้า parse fail แบบถาวร เช่น PDF เสีย จะเป็น `failed` พร้อม `failedReason` ถ้า Chroma fail จะเป็น `ready_without_chroma` และ retry ตาม backoff
@@ -184,6 +197,10 @@ worker จะ claim งานจากเอกสารสถานะ `queued`
 เมื่อผู้ใช้ถามคำถาม ระบบจะสร้างหรือใช้ chat session เดิม แล้วดึง context จาก Chroma จากนั้นส่ง prompt เข้า OpenAI และ stream คำตอบกลับมาที่ UI
 
 ฝั่ง UI จะเลื่อน chat ลงล่างอัตโนมัติเมื่อมีข้อความใหม่หรือระหว่าง AI กำลัง stream คำตอบ เพื่อให้ผู้ใช้ไม่ต้องเลื่อนเองหลังส่งคำถาม
+
+หน้า chat มี document picker แบบค้นหาได้ ผู้ใช้เลือกไฟล์เฉพาะเพื่อถาม/สรุป หรือปล่อยว่างเพื่อให้ระบบค้นจากทุกเอกสารที่พร้อมใช้งานได้ ถ้าเลือกเอกสารแล้ว UI จะแสดงแถบ “กำลังถามจาก” พร้อมสถานะของไฟล์ เพื่อป้องกันการถามผิดเอกสารเมื่อมีหลายไฟล์
+
+เมื่อ AI ตอบพร้อม citation ระบบจะแสดงปุ่ม `อ้างอิง` ใต้คำตอบ ผู้ใช้กดแล้วเห็นชื่อเอกสาร ตำแหน่ง chunk และข้อความต้นทางบางส่วนใน dialog ทำให้ตรวจสอบคำตอบย้อนหลังได้ง่ายขึ้น
 
 ### 6. Summarize Whole Document
 
@@ -242,6 +259,8 @@ FULL_DOCUMENT_CONTEXT_MAX_TOKENS=120000
 - Upload directory writable
 - Operational metrics เช่นจำนวนเอกสารตามสถานะ, stale processing jobs, token usage รวม
 
+หน้า admin จะแสดงสถานะเป็น `ปกติ`, `ควรตรวจสอบ`, `ผิดปกติ` และถ้า service มีปัญหาจะมีช่อง “วิธีแก้ต่อไป” เช่น ตรวจ OpenAI key/quota, restart Chroma, ตรวจ Redis URL, ตรวจ DATABASE_URL หรือ permission ของ upload volume
+
 เข้าใช้งานผ่าน:
 
 ```text
@@ -265,3 +284,4 @@ curl http://localhost:3000/api/admin/diagnostics
 - SQLite เหมาะกับ assignment/local demo แต่ production ที่มีผู้ใช้พร้อมกันจำนวนมากควรพิจารณา PostgreSQL
 - Chroma reconciliation ยังเป็น manual re-index/admin endpoint ยังไม่มี scheduled reconciliation อัตโนมัติ
 - Observability มี diagnostics และ structured worker logs แล้ว แต่ยังไม่มี external metrics/alerting เช่น Prometheus หรือ OpenTelemetry
+- Citation dialog แสดง excerpt จาก chunk แล้ว แต่ยังไม่ใช่ document viewer เต็มรูปแบบ ถ้าต้องการตรวจเอกสารระดับหน้า/ย่อหน้า ควรเพิ่ม preview หรือ page mapping สำหรับ PDF

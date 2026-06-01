@@ -3,7 +3,9 @@ import type { RetrievedContext } from "@/lib/rag/rag-service";
 type FallbackChunk = {
   id: string;
   content: string;
+  chunkIndex: number;
   document: {
+    id: string;
     title: string;
   };
 };
@@ -60,7 +62,9 @@ export function rankFallbackChunks(chunks: FallbackChunk[], query: string, limit
 
       return {
         chunkId: chunk.id,
+        documentId: chunk.document.id,
         documentTitle: chunk.document.title,
+        chunkIndex: chunk.chunkIndex,
         content: chunk.content,
         score
       };

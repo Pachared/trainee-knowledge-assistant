@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+import ChatOutlinedIcon from "@mui/icons-material/ChatOutlined";
 import TollOutlinedIcon from "@mui/icons-material/TollOutlined";
 import type { ApiUsage } from "@/components/app/types";
 
@@ -63,9 +66,17 @@ export function UsageView({ usage }: UsageViewProps) {
                 </Paper>
               ))
             ) : (
-              <Typography variant="body2" color="text.secondary">
-                ยังไม่มีข้อมูลโทเคน เริ่มแชทก่อนแล้วข้อมูลจะแสดงที่นี่
-              </Typography>
+              <Paper elevation={0} sx={{ border: 1, borderColor: "divider", p: 3, textAlign: "center" }}>
+                <Typography variant="h6" component="p" sx={{ mb: 1 }}>
+                  ยังไม่มีข้อมูลโทเคน
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  เมื่อถาม AI แล้ว ระบบจะบันทึกโทเคนเข้า/ออกของแต่ละคำตอบไว้ที่นี่
+                </Typography>
+                <Button component={Link} href="/chat" variant="contained" startIcon={<ChatOutlinedIcon />}>
+                  เริ่มแชท
+                </Button>
+              </Paper>
             )}
           </Stack>
         </Box>

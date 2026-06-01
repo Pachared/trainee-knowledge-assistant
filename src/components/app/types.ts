@@ -12,8 +12,18 @@ export type ApiMessage = {
   promptTokens: number;
   outputTokens: number;
   citedChunkIds?: string | null;
+  citations?: ApiCitation[];
   model?: string | null;
   createdAt: string;
+};
+
+export type ApiCitation = {
+  index: number;
+  chunkId: string;
+  documentId?: string;
+  title: string;
+  chunkIndex?: number;
+  excerpt?: string;
 };
 
 export type ApiDocument = {

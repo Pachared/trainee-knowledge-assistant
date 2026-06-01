@@ -77,6 +77,14 @@ export async function POST(request: Request) {
       contexts,
       summaryMode: isWholeDocumentSummary ? ("comprehensive" as const) : undefined
     };
+    const citations = contexts.map((context, index) => ({
+      index: index + 1,
+      chunkId: context.chunkId,
+      documentId: context.documentId,
+      title: context.documentTitle,
+      chunkIndex: context.chunkIndex,
+      excerpt: context.content.slice(0, 700)
+    }));
     const prompt = buildAssistantPrompt(assistantInput);
     const encoder = new TextEncoder();
 
@@ -90,11 +98,7 @@ export async function POST(request: Request) {
             encoder.encode(
               sse("meta", {
                 chatId: chat.id,
-                citations: contexts.map((context, index) => ({
-                  index: index + 1,
-                  chunkId: context.chunkId,
-                  title: context.documentTitle
-                }))
+                citations
               })
             )
           );
@@ -129,7 +133,10 @@ export async function POST(request: Request) {
           controller.enqueue(
             encoder.encode(
               sse("done", {
-                message: assistantMessage,
+                message: {
+                  ...assistantMessage,
+                  citations
+                },
                 usage: usageRecord
               })
             )
