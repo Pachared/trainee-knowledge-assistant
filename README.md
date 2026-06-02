@@ -51,6 +51,48 @@ DATABASE_URL=file:/app/data/db/dev.db
 7. start Next.js standalone server ที่ port `3000`
 8. start document worker สำหรับ parse/chunk/embed/index เอกสารแบบ background
 
+### แก้ปัญหา Docker/npm ci
+
+ถ้ารัน `docker compose up --build` แล้ว Docker หยุดที่ขั้นตอนนี้:
+
+```text
+RUN npm ci
+npm error `npm ci` can only install packages when your package.json and package-lock.json are in sync
+```
+
+แปลว่า `package.json` กับ `package-lock.json` ไม่ตรงกัน หรือ lockfile อ้าง dependency บางตัวไว้แต่ไม่มี entry ของ package นั้นครบในส่วน `packages` ของ lockfile ตัวอย่างที่เคยเกิดขึ้นใน project นี้คือ Docker แจ้งว่าขาด optional transitive dependencies:
+
+```text
+@emnapi/runtime@1.10.0
+@emnapi/core@1.10.0
+```
+
+บนเครื่อง local บางครั้ง `npm install` อาจยังผ่าน เพราะ npm ยอมปรับ dependency แบบยืดหยุ่นกว่า แต่ Dockerfile ใช้ `npm ci` ซึ่ง strict กว่าเพื่อให้ build reproducible ดังนั้นถ้า lockfile ไม่ครบ Docker จะ fail ทันที
+
+วิธีตรวจ:
+
+```bash
+npm ci --dry-run
+docker compose build web
+```
+
+ถ้า `npm ci --dry-run` fail ให้ regenerate หรือซ่อม `package-lock.json` ให้ sync ก่อน แล้วค่อย build Docker ใหม่:
+
+```bash
+npm install --package-lock-only --include=optional
+npm ci --dry-run
+docker compose up --build
+```
+
+หลังแก้ควรรัน verification ชุดหลัก:
+
+```bash
+npm run lint
+npm test
+npm run build
+docker compose build web
+```
+
 ## Local Development
 
 ถ้าต้องการรันแบบ dev แยกส่วน สามารถใช้คำสั่งเหล่านี้:
